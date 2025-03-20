@@ -15,6 +15,19 @@
 #define NUMOFVLAN 4095
 #define NOVLAN 0xfff
 
+#define EXIST_OK 0
+#define X_OK 01
+#define W_OK 02
+#define WX_OK 03
+#define R_OK 04
+#define RX_OK 05
+#define RW_OK 06
+#define RWX_OK 07
+
+#define PRIOFLAG 0x80
+#define TYPEMASK 0x7f
+#define ISPRIO(X) ((X) & PRIOFLAG)
+
 extern unsigned char switchmac[];
-extern char* prog;
+extern const char* prog;
 extern char errorbuff[1024];

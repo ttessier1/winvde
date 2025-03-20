@@ -5,3 +5,4 @@
 #define ADDCL(CL) addcl(sizeof(CL)/sizeof(struct comlist),(CL))
 
 void StartConsMgmt(void);
+void loadrcfile(void);

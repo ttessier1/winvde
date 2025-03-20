@@ -881,3 +881,8 @@ int rec_close_ep(struct endpoint** pep, int fd_ctl)
 	else
 		return ENXIO;
 }
+
+int ep_get_port(struct endpoint* ep)
+{
+	return ep->port;
+}

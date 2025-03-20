@@ -38,3 +38,4 @@ void vlanprintactive(int vlan, FILE* fd);
 char* port_getuser(int uid);
 char* port_getgroup(int gid);
 int rec_close_ep(struct endpoint** pep, int fd_ctl);
+int ep_get_port(struct endpoint* ep);

@@ -17,7 +17,7 @@
 #include "winvde_printfunc.h"
 #include "winvde_qtimer.h"
 #include "winvde_loglevel.h"
-#include "options.h"
+#include "winvde_getopt.h"
 #include "version.h"
 
 // defines
@@ -27,10 +27,7 @@
 #define MGMTGROUPARG 0x101
 #define NOSTDINARG 0x102
 
-#define EXIST_OK 0
-#define W_OK 02
-#define R_OK 04
-#define RW_OK 06
+
 
 // forward declarations
 int vde_logout();

@@ -18,42 +18,33 @@
 #include "winvde_hash.h"
 #include "winvde_port.h"
 #include "winvde_loglevel.h"
-#include "options.h"
-#include "getopt.h"
+#include "winvde_getopt.h"
+#include "winvde_descriptor.h"
+#include "winvde_output.h"
+#include "winvde_qtimer.h"
+#include "winvde_mgmt.h"
+
 #include "version.h"
 
 // add libraries
 #pragma comment (lib,"ws2_32.lib")
 
-// constants
-/* FD MGMT */
-struct pollplus {
-    unsigned char type;
-    void* private_data;
-    time_t timestamp;
-};
 
-static struct pollfd* fds = NULL;
-static struct pollplus** fdpp = NULL;
 
 #define PRIOFLAG 0x80
-#define TYPEMASK 0x7f
 #define ISPRIO(X) ((X) & PRIOFLAG)
 
-#define TYPE2MGR(X) (winvde_modules[((X) & TYPEMASK)])
+
 // global variables
 unsigned char switchmac[ETH_ALEN];
 
 char errorbuff[1024];
 int hash_size = INIT_HASH_SIZE;
 static int numports = INIT_NUMPORTS;
-char* prog;
-int nfds = 0;
+const char* prog;
 
 static uint64_t xrand48 = 0;
 static uint64_t xx = 0;
-
-uint32_t number_of_filedescriptors = 0;
 
 // function declarations
 void srand48(uint64_t seed);
@@ -73,7 +64,7 @@ void Usage();
 void Version();
 void main_loop();
 
-#if !defined(TEST_QTIMER) && !defined(TEST_BITARRAY)
+#if !defined(TEST_QTIMER) && !defined(TEST_BITARRAY) && !defined(TEST_PATH_FUNCTIONS)
 int main(const int argc, const char ** argv)
 {
     WSADATA wsadata;
@@ -83,7 +74,7 @@ int main(const int argc, const char ** argv)
         exit(0xFFFFFFFF);
     }
 
-    prog = argv[0];
+    prog = (char*)argv[0];
 
     memset(&wsadata,0,sizeof(WSADATA));
 
@@ -109,7 +100,7 @@ int main(const int argc, const char ** argv)
 
     fprintf(stdout, "Arguments Parsed\n");
 
-    atexit(CleanUp);
+    atexit(&CleanUp);
 
     HashInit(hash_size);
 
@@ -137,14 +128,14 @@ int main(const int argc, const char ** argv)
 void SetMacAddress()
 {
     struct timeval v;
-    unsigned long val;
+    unsigned long long val;
     int index;
 
     gettimeofday(&v);
     srand48(v.tv_sec ^ v.tv_usec ^ _getpid());
     for (index = 0, val = lrand48(); index < 4; index++, val >>= 8)
     {
-        switchmac[index + 2] = val;
+        switchmac[index + 2] = (char)val&0xFF;
     }
     switchmac[0] = 0;
     switchmac[1] = 0xff;
@@ -155,14 +146,14 @@ int gettimeofday(struct timeval* tv)
 {
     FILETIME lpFileTime;
     ULARGE_INTEGER timeValue64;
-    ULONGLONG total;
+    LONGLONG total;
     const ULONGLONG epoch_offset = 11644473600000000ULL;
     if (!tv)
     {
         errno = EINVAL;
         return -1;
     }
-#if definde WIN32_WINNT >= _WIN32_WINNT_WIN8
+#if WIN32_WINNT >= _WIN32_WINNT_WIN8
     GetSystemTimePreciseAsFileTime(&lpFileTime);
 #else
     GetSystemTimeAsFileTime(&lpFileTime);
@@ -172,8 +163,9 @@ int gettimeofday(struct timeval* tv)
     timeValue64.LowPart = lpFileTime.dwLowDateTime;
 
     total = timeValue64.QuadPart / 10 - epoch_offset;
-    tv->tv_sec = (time_t)(total / 1000000ULL);
+    tv->tv_sec = (long)(total / 1000000ULL);
     tv->tv_usec = (long)(total / 1000000ULL);
+    return 0;
 }
 
 void srand48(uint64_t seed)
@@ -294,19 +286,7 @@ void CleanUp()
 
 }
 
-void FileCleanUp()
-{
-    uint32_t index = 0;
-    struct winvde_module* module;
-    for (index = 0; index < number_of_filedescriptors; index++)
-    {
-        module = &TYPE2MGR(fdpp[index]->type);
-        if (module != NULL)
-        {
-            module->cleanup(fdpp[index]->type, fds[index].fd, fdpp[index]->private_data);
-        }
-    }
-}
+
 
 struct option* optcpy(struct option* tgt, struct option* src, int n, int tag)
 {
@@ -398,7 +378,7 @@ void ParseArguments(const int argc, const char** argv)
     };
     static struct option optail = { 0,0,0,0 };
 #define N_global_options (sizeof(global_options)/sizeof(struct option))
-    prog = argv[0];
+    prog = (char*)argv[0];
     int totopts = N_global_options + 1;
 
     for (module = winvde_modules; module != NULL; module = module->next)
@@ -435,6 +415,7 @@ void ParseArguments(const int argc, const char** argv)
         /* Parse args */
         int option_index = 0;
         int c;
+        optreset = 1;
         while (1) {
             c = getopt_long(argc, argv, optstring,long_options, &option_index);
             if (c == -1)
@@ -453,10 +434,28 @@ void ParseArguments(const int argc, const char** argv)
     }
     if (optind < argc)
     {
+        if (long_options)
+        {
+            free(long_options);
+            long_options = NULL;
+        }
+        if (optstring)
+        {
+            free(optstring);
+            optstring = NULL;
+        }
         Usage();
     }
-    free(long_options);
-    free(optstring);
+    if (long_options)
+    {
+        free(long_options);
+        long_options = NULL;
+    }
+    if (optstring)
+    {
+        free(optstring);
+        optstring = NULL;
+    }
 
 }
 
@@ -519,32 +518,42 @@ void Version()
 void main_loop()
 {
     time_t now;
+    int error_count = 0;
     int n, i;
     while (1) {
-        n = select(nfds, fds, NULL,NULL,NULL);
+        n = select(number_of_filedescriptors, fds, NULL,NULL,NULL);
         now = qtime();
         if (n < 0) {
             if (errno != EINTR)
             {
                 strerror_s(errorbuff, sizeof(errorbuff), errno);
                 printlog(LOG_WARNING, "poll %s", errorbuff);
+                error_count++;
+                if (error_count > 3)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                error_count = 0;
             }
         }
         else {
-            for (i = 0; /*i < nfds &&*/ n > 0; i++) {
+            for (i = 0; /*i < number_of_filedescriptors &&*/ n > 0; i++) {
                 if (fds[i].revents != 0) {
-                    int prenfds = nfds;
+                    int prenfds = number_of_filedescriptors;
                     n--;
                     fdpp[i]->timestamp = now;
                     TYPE2MGR(fdpp[i]->type).handle_io(fdpp[i]->type, fds[i].fd, fds[i].revents, fdpp[i]->private_data);
-                    if (nfds != prenfds) /* the current fd has been deleted */
+                    if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
                         break; /* PERFORMANCE it is faster returning to poll */
                 }
                 /* optimization: most used descriptors migrate to the head of the poll array */
 #ifdef OPTPOLL
                 else
                 {
-                    if (i < nfds && i > 0 && i != nprio) {
+                    if (i < number_of_filedescriptors && i > 0 && i != nprio) {
                         int i_1 = i - 1;
                         if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
                             struct pollfd tfds;

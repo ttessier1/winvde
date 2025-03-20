@@ -44,6 +44,9 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <EnableASAN>
+    </EnableASAN>
+    <SpectreMitigation>Spectre</SpectreMitigation>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -102,12 +105,19 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);TEST_BITARRAY</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <StringPooling>
+      </StringPooling>
+      <ControlFlowGuard>
+      </ControlFlowGuard>
+      <GuardSignedReturns>
+      </GuardSignedReturns>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <DataExecutionPrevention />
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -129,7 +139,10 @@
   <ItemGroup>
     <ClCompile Include="version.c" />
     <ClCompile Include="winvde_comlist.c" />
+    <ClCompile Include="winvde_common.c" />
+    <ClCompile Include="winvde_descriptor.c" />
     <ClCompile Include="winvde_gc.c" />
+    <ClCompile Include="winvde_getopt.c" />
     <ClCompile Include="winvde_hash.c" />
     <ClCompile Include="winvde_modsupport.c" />
     <ClCompile Include="winvde_module.c" />
@@ -139,12 +152,17 @@
     <ClCompile Include="winvde_port.c" />
     <ClCompile Include="winvde_printfunc.c" />
     <ClCompile Include="winvde_qtimer.c" />
+    <ClCompile Include="winvde_sockutils.c" />
     <ClCompile Include="winvde_switch.c" />
+    <ClCompile Include="winvde_type.c" />
+    <ClCompile Include="winvde_user.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bitarray.h" />
-    <ClInclude Include="getopt.h" />
-    <ClInclude Include="options.h" />
+    <ClInclude Include="winvde.h" />
+    <ClInclude Include="winvde_common.h" />
+    <ClInclude Include="winvde_descriptor.h" />
+    <ClInclude Include="winvde_getopt.h" />
     <ClInclude Include="winvde_gc.h" />
     <ClInclude Include="version.h" />
     <ClInclude Include="winvde_comlist.h" />
@@ -157,7 +175,10 @@
     <ClInclude Include="winvde_output.h" />
     <ClInclude Include="winvde_printfunc.h" />
     <ClInclude Include="winvde_qtimer.h" />
+    <ClInclude Include="winvde_sockutils.h" />
     <ClInclude Include="winvde_switch.h" />
+    <ClInclude Include="winvde_type.h" />
+    <ClInclude Include="winvde_user.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="winvde_port.h" />

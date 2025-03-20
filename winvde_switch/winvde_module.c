@@ -4,6 +4,7 @@
 #include <Windows.h>
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <direct.h>
 
@@ -55,15 +56,20 @@ void init_mods(void)
 	struct winvde_module * module;
 	char* path[MAX_PATH];
 	/* Keep track of the initial cwd */
-	_getcwd(path,sizeof(path));
-
-	for (module = winvde_modules; module != NULL; module = module->next)
+	if (_getcwd((char*)path, sizeof(path)) != NULL)
 	{
-		if (module->init != NULL)
+
+		for (module = winvde_modules; module != NULL; module = module->next)
 		{
-			module->init();
-			// reset folder if we were changed by module
-			_chdir(path);
+			if (module->init != NULL)
+			{
+				module->init();
+				// reset folder if we were changed by module
+				if (_chdir((char*)path)>0)
+				{
+					fprintf(stderr, "Failed to set the current directory\n");
+				}
+			}
 		}
 	}
 }
