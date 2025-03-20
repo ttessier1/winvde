@@ -1,12 +1,15 @@
 // standard includes
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#include <WinSock2.h>
 #include <winmeta.h>
+#include <afunix.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <io.h>
 #include <process.h>
+#include <direct.h>
 
 // custom includes
 #include "winvde_mgmt.h"
@@ -18,7 +21,25 @@
 #include "winvde_qtimer.h"
 #include "winvde_loglevel.h"
 #include "winvde_getopt.h"
+#include "winvde_sockutils.h"
 #include "version.h"
+#include "winvde_user.h"
+#include "winvde_descriptor.h"
+#include "winvde_type.h"
+#include "winvde_debugcl.h"
+
+//#ifdef DEBUGOPT
+#define DBGCLSTEP 8
+
+#define MGMTPORTNEW (dl) 
+#define MGMTPORTDEL (dl+1) 
+#define MGMTSIGHUP (dl+2) 
+static struct dbgcl dl[] = {
+	{"mgmt/+",NULL,D_MGMT | D_PLUS},
+	{"mgmt/-",NULL,D_MGMT | D_MINUS},
+	{"sig/hup",NULL,D_SIG | D_HUP}
+};
+//#endif
 
 // defines
 #define Nlong_options (sizeof(long_options)/sizeof(struct option));
@@ -27,14 +48,23 @@
 #define MGMTGROUPARG 0x101
 #define NOSTDINARG 0x102
 
+int daemonize = 0;
+int nostdin = 0;
+unsigned int console_type = -1;
+unsigned int mgmt_ctl = -1;
+unsigned int mgmt_data = -1;
+unsigned int mgmt_group = -1;
 
+char pidfile_path[MAX_PATH];
 
 // forward declarations
 int vde_logout();
 int vde_shutdown();
 int mgmt_showinfo(FILE* fd);
-int runscript(int fd, char* path);
+void save_pidfile();
+int runscript(SOCKET fd, char* path);
 int help(FILE* fd, char* arg);
+
 
 static struct comlist cl[] = {
 	{"help","[arg]","Help (limited to arg when specified)",help,STRARG | WITHFILE},
@@ -73,9 +103,9 @@ static struct option long_options[] = {
 struct winvde_module mgmgt_module;
 
 int mgmt_mode = 0600;
-unsigned int mgmt_data = -1;
 
 BOOL DoDaemonize = FALSE;
+BOOL DoNoStdIn = FALSE;
 BOOL DoPidFile = FALSE;
 BOOL DoRcFile = FALSE;
 BOOL DoMgmtSocket = FALSE;
@@ -86,7 +116,7 @@ char* mgmt_socket = NULL;
 
 // function declarations
 void mgmt_usage();
-int mgmt_parse_options(const int c, const char** optarg);
+int mgmt_parse_options(const int c, const char* optarg);
 void mgmt_init(void);
 void mgmt_handle_io(unsigned char type, int fd, int revents, void* private_data);
 void mgmt_cleanup(unsigned char type, int fd, void* private_data);
@@ -134,25 +164,240 @@ void mgmt_usage()
 		);
 }
 
-int mgmt_parse_options(const int c, const char** optarg)
+int mgmt_parse_options(const int c, const char* optarg)
 {
-	fprintf(stderr, "parseopt:Not Implemeted\n");
-	return -1;
+	int outc = 0;
+	struct group* grp;
+	switch (c)
+	{
+		case 'd':
+			DoDaemonize = TRUE;
+			break;
+		case 'p':
+			pidfile = _strdup(optarg);
+			break;
+		case 'f':
+			rcfile = _strdup(optarg);
+			break;
+		case 'M':
+			mgmt_socket = _strdup(optarg);
+			break;
+		case MGMTMODEARG:
+			sscanf_s(optarg, "%o", &mgmt_mode);
+			break;
+		case MGMTGROUPARG:
+			if (!(grp = GetGroupFunction(optarg)))
+			{
+				fprintf(stderr, "No such group '%s'\n", optarg);
+				exit(1);
+			}
+			mgmt_group = grp->groupid;
+			break;
+		case NOSTDINARG:
+			nostdin = 1;
+			break;
+		default:
+			outc = c;
+	}
+	return outc;
+
 }
 
 void mgmt_init(void)
 {
-	fprintf(stderr, "init:Not Implemeted\n");
+	if (DoDaemonize) {
+		//openlog(basename(prog), LOG_PID, 0);
+		//logok = 1;
+		//syslog(LOG_INFO, "VDE_SWITCH started");
+	}
+	/* add stdin (if tty), connect and data fds to the set of fds we wait for
+	 *    * input */
+
+	if (!DoDaemonize && !DoNoStdIn)
+	{
+		console_type = add_type(&mgmgt_module, 0);
+		add_fd(0, console_type, NULL);
+	}
+
+	/* saves current path in pidfile_path, because otherwise with daemonize() we
+	 *    * forget it */
+	if (_getcwd(pidfile_path, MAX_PATH - 2) == NULL) {
+		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		printlog(LOG_ERR, "getcwd: %s", errorbuff);
+		exit(1);
+	}
+	strcat_s(pidfile_path,MAX_PATH, "\\");
+	if (DoDaemonize ) {
+
+		RunDaemon();
+		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		printlog(LOG_ERR, "daemon: %s", errorbuff);
+		exit(1);
+	}
+
+	/* once here, we're sure we're the true process which will continue as a
+	 *    * server: save PID file if needed */
+	if (pidfile)
+	{
+		save_pidfile();
+	}
+
+	if (mgmt_socket != NULL) {
+		SOCKET mgmtconnfd;
+		struct sockaddr_un sun;
+		int one = 1;
+
+		if ((mgmtconnfd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_ERR, "mgmt socket: %s", errorbuff);
+			return;
+		}
+		if (setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char*)&one,sizeof(one)) < 0) {
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_ERR, "mgmt setsockopt: %s", errorbuff);
+			return;
+		}
+		if(ioctlsocket(mgmtconnfd, FIONBIO,&one)==SOCKET_ERROR)
+		{
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_ERR, "Setting O_NONBLOCK on mgmt fd: %s", errorbuff);
+			return;
+		}
+		sun.sun_family = PF_UNIX;
+		snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", mgmt_socket);
+		if (bind(mgmtconnfd, (struct sockaddr*)&sun, sizeof(sun)) < 0) {
+			if ((errno == EADDRINUSE) && still_used(&sun)) return;
+			else if (bind(mgmtconnfd, (struct sockaddr*)&sun, sizeof(sun)) < 0) {
+				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				printlog(LOG_ERR, "mgmt bind %s", errorbuff);
+				return;
+			}
+		}
+		// Do not set permissions
+		//setmgmtperm(sun.sun_path);
+		if (listen(mgmtconnfd, 15) < 0) {
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_ERR, "mgmt listen: %s", errorbuff);
+			return;
+		}
+		mgmt_ctl = add_type(&mgmgt_module, 0);
+		mgmt_data = add_type(&mgmgt_module, 0);
+		add_fd(mgmtconnfd, mgmt_ctl, NULL);
+	}
+
 }
 
-void mgmt_handle_io(unsigned char type, int fd, int revents, void* private_data)
+void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data)
 {
-	fprintf(stderr, "handle_io:Not Implemeted\n");
+	char buf[MAXCMD];
+	int n = 0;
+	int cmdout = 0;
+	struct sockaddr addr;
+	int one = 1;
+	SOCKET new = INVALID_SOCKET;
+	size_t len;
+	if (type != mgmt_ctl)
+	{
+		if (revents & POLLIN)
+		{
+			n = recv(fd, buf, sizeof(buf),0);
+			if (n < 0)
+			{
+				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				printlog(LOG_WARNING, "Reading from mgmt %s",errorbuff);
+				return;
+			}
+		}
+		if (n == 0)
+		{ /*EOF || POLLHUP*/
+			if (type == console_type)
+			{
+				printlog(LOG_WARNING, "EOF on stdin, cleaning up and exiting");
+				exit(0);
+			}
+			else
+			{
+#ifdef DEBUGOPT
+				debugdel(fd, "");
+#endif
+				remove_fd(fd);
+			}
+		}
+		else
+		{
+			buf[n] = 0;
+			if (n > 0 && buf[n - 1] == '\n')
+			{
+				buf[n - 1] = 0;
+			}
+			cmdout = handle_cmd(type, (type == console_type) ? 1 : fd, buf);
+			if (cmdout >= 0)
+			{
+				send(fd, prompt, (int)strlen(prompt), 0);
+			}
+			else
+			{
+				if (type == mgmt_data)
+				{
+					send(fd, EOS, (int)strlen(EOS),0);
+#ifdef DEBUGOPT
+					EVENTOUT(MGMTPORTDEL, fd);
+					debugdel(fd, "");
+#endif
+					remove_fd(fd);
+				}
+				if (cmdout == -2)
+				{
+					exit(0);
+				}
+			}
+		}
+	}
+	else
+	{/* mgmt ctl */
+		len = sizeof(addr);
+		new = accept(fd, &addr, &len);
+		if (new < 0)
+		{
+			strerror_s(errorbuff,sizeof(errorbuff),errno);
+			printlog(LOG_WARNING, "mgmt accept %s", errorbuff);
+			return;
+		}
+		if (ioctlsocket(new, FIONBIO, &one) == SOCKET_ERROR)
+		{
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_WARNING, "mgmt fcntl - setting O_NONBLOCK %s", errorbuff);
+			closesocket(new);
+			return;
+		}
+
+		add_fd(new, mgmt_data, NULL);
+		EVENTOUT(MGMTPORTNEW, new);
+		snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
+		send(new, buf, strlen(buf),0);
+		send(new, prompt, strlen(prompt),0);
+	}
+
 }
 
-void mgmt_cleanup(unsigned char type, int fd, void* private_data)
+void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
 {
-	fprintf(stderr, "cleanup:Not Implemeted\n");
+	if (fd < 0)
+	{
+		if ((pidfile != NULL) && _unlink(pidfile_path) < 0)
+		{
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, errorbuff);
+		}
+	}
+	else
+	{
+		closesocket(fd);
+		if (type == mgmt_ctl && mgmt_socket != NULL) {
+			_unlink(mgmt_socket);
+		}
+	}
+
 
 }
 
@@ -178,17 +423,25 @@ int mgmt_showinfo(FILE* fd)
 	return 0;
 }
 
-int runscript(int fd, char* path)
+int runscript(SOCKET fd, char* path)
 {
 	size_t len = 0;
 	FILE* f = fopen(path, "r");
 	char buf[MAXCMD];
 	if (f == NULL)
+	{
 		return errno;
-	else {
-		while (fgets(buf, MAXCMD, f) != NULL) {
-			if (strlen(buf) > 1 && buf[strlen(buf) - 1] == '\n') buf[strlen(buf) - 1] = '\0';
-			if (fd >= 0) {
+	}
+	else
+	{
+		while (fgets(buf, MAXCMD, f) != NULL)
+		{
+			if (strlen(buf) > 1 && buf[strlen(buf) - 1] == '\n')
+			{
+				buf[strlen(buf) - 1] = '\0';
+			}
+			if (fd >= 0)
+			{
 				char* scriptprompt = NULL;
 				asprintf(&scriptprompt, "vde[%s]: %s\n", path, buf);
 				len = strlen(scriptprompt);
@@ -197,7 +450,7 @@ int runscript(int fd, char* path)
 					fprintf(stderr, "Failed to write more than INT_MAX bytes: %lld\n",len);
 					return -1;
 				}
-				_write(fd, scriptprompt, (int)len);
+				send(fd, scriptprompt, (int)len,0);
 				free(scriptprompt);
 			}
 			handle_cmd(mgmt_data, fd, buf);
@@ -219,10 +472,13 @@ int help(FILE* fd, char* arg)
 	return 0;
 }
 
-int handle_cmd(int type, int fd, char* input_buffer)
+int handle_cmd(int type, SOCKET fd, char* input_buffer)
 {
-	/*struct comlist* p;
+	struct comlist* p;
 	int rv = ENOSYS;
+	char* outbuf=NULL;
+	size_t outbufsize=0;
+	FILE* f = NULL;
 	if (!input_buffer)
 	{
 		errno = EINVAL;
@@ -234,55 +490,71 @@ int handle_cmd(int type, int fd, char* input_buffer)
 	}
 	if (*input_buffer != '\0' && *input_buffer != '#')
 	{
-		char* outbuf;
-		size_t outbufsize;
-		FILE* f = open_memstream(&outbuf, &outbufsize);
+		f = open_memstream(&outbuf, &outbufsize);
 		for (p = clh; p != NULL && (p->doit == NULL || strncmp(p->path, input_buffer, strlen(p->path)) != 0); p = p->next)
+		{
 			;
+		}
 		if (p != NULL)
 		{
 			input_buffer += strlen(p->path);
-			while (*input_buffer == ' ' || *input_buffer == '\t') input_buffer++;
-			if (p->type & WITHFD) {
-				if (fd >= 0) {
-					if (p->type & WITHFILE) {
+			while (*input_buffer == ' ' || *input_buffer == '\t')
+			{
+				input_buffer++;
+			}
+			if (p->type & WITHFD)
+			{
+				if (fd >= 0)
+				{
+					if (p->type & WITHFILE)
+					{
 						printoutc(f, "0000 DATA END WITH '.'");
-						switch (p->type & ~(WITHFILE | WITHFD)) {
-						case NOARG: rv = p->doit(f, fd); break;
-						case INTARG: rv = p->doit(f, fd, atoi(input_buffer)); break;
-						case STRARG: rv = p->doit(f, fd, input_buffer); break;
+						switch (p->type & ~(WITHFILE | WITHFD))
+						{
+							case NOARG: rv = p->doit(f, fd); break;
+							case INTARG: rv = p->doit(f, fd, atoi(input_buffer)); break;
+							case STRARG: rv = p->doit(f, fd, input_buffer); break;
 						}
 						printoutc(f, ".");
 					}
-					else {
-						switch (p->type & ~WITHFD) {
-						case NOARG: rv = p->doit(fd); break;
-						case INTARG: rv = p->doit(fd, atoi(input_buffer)); break;
-						case STRARG: rv = p->doit(fd, input_buffer); break;
+					else
+					{
+						switch (p->type & ~WITHFD)
+						{
+							case NOARG: rv = p->doit(fd); break;
+							case INTARG: rv = p->doit(fd, atoi(input_buffer)); break;
+							case STRARG: rv = p->doit(fd, input_buffer); break;
 						}
 					}
 				}
 				else
+				{
 					rv = EBADF;
+				}
 			}
-			else if (p->type & WITHFILE) {
+			else if (p->type & WITHFILE)
+			{
 				printoutc(f, "0000 DATA END WITH '.'");
-				switch (p->type & ~WITHFILE) {
-				case NOARG: rv = p->doit(f); break;
-				case INTARG: rv = p->doit(f, atoi(input_buffer)); break;
-				case STRARG: rv = p->doit(f, input_buffer); break;
+				switch (p->type & ~WITHFILE)
+				{
+					case NOARG: rv = p->doit(f); break;
+					case INTARG: rv = p->doit(f, atoi(input_buffer)); break;
+					case STRARG: rv = p->doit(f, input_buffer); break;
 				}
 				printoutc(f, ".");
 			}
-			else {
-				switch (p->type) {
-				case NOARG: rv = p->doit(); break;
-				case INTARG: rv = p->doit(atoi(input_buffer)); break;
-				case STRARG: rv = p->doit(input_buffer); break;
+			else
+			{
+				switch (p->type)
+				{
+					case NOARG: rv = p->doit(); break;
+					case INTARG: rv = p->doit(atoi(input_buffer)); break;
+					case STRARG: rv = p->doit(input_buffer); break;
 				}
 			}
 		}
-		if (rv == 0) {
+		if (rv == 0)
+		{
 			printoutc(f, "1000 Success");
 		}
 		else if (rv > 0)
@@ -292,14 +564,14 @@ int handle_cmd(int type, int fd, char* input_buffer)
 		}
 		fclose(f);
 		if (fd >= 0)
-			write(fd, outbuf, outbufsize);
+		{
+			send(fd, outbuf, outbufsize,0);
+		}
 		free(outbuf);
 	}
 	return rv;
-	*/
-	return -1;
-
 }
+
 void loadrcfile(void)
 {
 	size_t size;
@@ -316,5 +588,47 @@ void loadrcfile(void)
 			if (_access(STDRCFILE, R_OK) == 0)
 				runscript(-1, STDRCFILE);
 		}
+	}
+}
+
+
+void RunDaemon()
+{
+
+}
+
+static void save_pidfile()
+{
+	if (pidfile[0] != '/')
+	{
+		strncat_s(pidfile_path, MAX_PATH,pidfile, MAX_PATH - strlen(pidfile_path) - 1);
+	}
+	else
+		strncpy_s(pidfile_path, MAX_PATH,pidfile, MAX_PATH - 1);
+
+	
+	FILE* fileHandle = NULL;
+	errno = fopen_s(&fileHandle, pidfile_path, "w");
+	if (errno == -1 || fileHandle==NULL) {
+		strerror_s(errorbuff,sizeof(errorbuff),errno);
+		printlog(LOG_ERR, "Error in pidfile creation: %s",errorbuff);
+		exit(1);
+	}
+
+	if (fprintf(fileHandle, "%ld\n", (long int)_getpid()) <= 0) {
+		printlog(LOG_ERR, "Error in writing pidfile");
+		exit(1);
+	}
+	fclose(fileHandle);
+}
+
+void eventout(struct dbgcl* cl, ...)
+{
+	uint32_t index = 0;
+	va_list arg;
+	for (index = 0; index < cl->nfun; index++) {
+		va_start(arg, cl);
+		(cl->fun[index])(cl, cl->funarg[index], arg);
+		va_end(arg);
 	}
 }

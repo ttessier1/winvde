@@ -138,8 +138,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="version.c" />
+    <ClCompile Include="winvde_debugcl.c" />
     <ClCompile Include="winvde_comlist.c" />
     <ClCompile Include="winvde_common.c" />
+    <ClCompile Include="winvde_debugcl.h" />
     <ClCompile Include="winvde_descriptor.c" />
     <ClCompile Include="winvde_gc.c" />
     <ClCompile Include="winvde_getopt.c" />

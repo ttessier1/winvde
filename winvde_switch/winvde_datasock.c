@@ -25,6 +25,7 @@
 #include "winvde_user.h"
 #include "winvde_descriptor.h"
 #include "winvde_sockutils.h"
+#include "winvde_port.h"
 
 // defines
 

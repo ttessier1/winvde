@@ -40,3 +40,19 @@ int still_used(struct sockaddr_un* sun)
 	closesocket(test_fd);
 	return(ret);
 }
+
+
+int strlength(const char*string)
+{
+	int length = 0;
+	if (!string)
+	{
+		return 0;
+	}
+	while (*string != '\0')
+	{
+		string++;
+		length++;
+	}
+	return length;
+}
