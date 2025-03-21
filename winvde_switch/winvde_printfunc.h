@@ -2,5 +2,5 @@
 
 #include <varargs.h>
 
-void asprintf(char ** buffer, char * fmt, ...);
-void avsprintf(char** buffer, char* fmt, ...);
+size_t asprintf(char ** buffer, char * fmt, ...);
+size_t vasprintf(char** buffer, char* fmt, ...);

@@ -112,19 +112,19 @@ static inline bitarray ba_realloc(bitarray b, int n, int m)
 	return nb;
 }
 
-static inline int ba_check(bitarray x, int i)
+static inline int ba_check(bitarray x, int index)
 {
-	return (x && (x[i >> __LOG_WORDSIZE] & (1L << (i & __WORDSIZEMASK))));
+	return (x && (x[index >> __LOG_WORDSIZE] & (1L << (index & __WORDSIZEMASK))));
 }
 
-static inline void ba_set(bitarray x, int i)
+static inline void ba_set(bitarray x, int index)
 {
-	x[i >> __LOG_WORDSIZE] |= (1L << (i & __WORDSIZEMASK));
+	x[index >> __LOG_WORDSIZE] |= (1L << (index & __WORDSIZEMASK));
 }
 
-static inline void ba_clr(bitarray x, int i)
+static inline void ba_clr(bitarray x, int index)
 {
-	x[i >> __LOG_WORDSIZE] &= ~(1L << (i & __WORDSIZEMASK));
+	x[index >> __LOG_WORDSIZE] &= ~(1L << (index & __WORDSIZEMASK));
 }
 
 static inline void ba_zap(bitarray x, int n)
@@ -226,25 +226,25 @@ static inline bitarray bac_realloc(bitarray b, int n, int m)
 }
 
 /* ba_check and bac_check are the same */
-static inline int bac_check(bitarray x, int i)
+static inline int bac_check(bitarray x, int index)
 {
-	return (x && (x[i >> __LOG_WORDSIZE] & (1L << (i & __WORDSIZEMASK))));
+	return (x && (x[index >> __LOG_WORDSIZE] & (1L << (index & __WORDSIZEMASK))));
 }
 
-static inline void bac_set(bitarray x, int n, int i)
+static inline void bac_set(bitarray x, int n, int index)
 {
-	bitarrayelem __v = x[i >> __LOG_WORDSIZE];
+	bitarrayelem __v = x[index >> __LOG_WORDSIZE];
 	bitarrayelem __w = __v;
-	__v |= (1L << (i & __WORDSIZEMASK));
-	if (__v != __w) x[i >> __LOG_WORDSIZE] = __v, (x[__WORDSIZEROUND(n)]++);
+	__v |= (1L << (index & __WORDSIZEMASK));
+	if (__v != __w) x[index >> __LOG_WORDSIZE] = __v, (x[__WORDSIZEROUND(n)]++);
 }
 
-static inline void bac_clr(bitarray x, int n, int i)
+static inline void bac_clr(bitarray x, int n, int index)
 {
-	bitarrayelem __v = x[i >> __LOG_WORDSIZE];
+	bitarrayelem __v = x[index >> __LOG_WORDSIZE];
 	bitarrayelem __w = __v;
-	__v &= ~(1L << (i & __WORDSIZEMASK));
-	if (__v != __w) x[i >> __LOG_WORDSIZE] = __v, (x[__WORDSIZEROUND(n)]--);
+	__v &= ~(1L << (index & __WORDSIZEMASK));
+	if (__v != __w) x[index >> __LOG_WORDSIZE] = __v, (x[__WORDSIZEROUND(n)]--);
 }
 
 static inline void bac_zap(bitarray x, int n)

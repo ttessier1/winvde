@@ -119,9 +119,9 @@ char* mgmt_socket = NULL;
 void mgmt_usage();
 int mgmt_parse_options(const int c, const char* optarg);
 void mgmt_init(void);
-void mgmt_handle_io(unsigned char type, int fd, int revents, void* private_data);
-void mgmt_cleanup(unsigned char type, int fd, void* private_data);
-int handle_cmd(int type, int fd, char* inbuf);
+void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data);
+void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data);
+int handle_cmd(int type, SOCKET fd, char* inbuf);
 
 // EntryPoint
 void StartConsMgmt(void)
@@ -413,14 +413,23 @@ static int vde_shutdown()
 	return -2;
 }
 
-int mgmt_showinfo(FILE* fd)
+int mgmt_showinfo(struct comparameter* parameter)
 {
-	printoutc(fd, header, PACKAGE_VERSION);
-	printoutc(fd, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d", _getpid(),
-		switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5],
-		qtime());
-	if (mgmt_socket)
-		printoutc(fd, "mgmt %s perm 0%03o", mgmt_socket, mgmt_mode);
+	if (parameter == NULL)
+	{
+		return;
+	}
+	if (parameter->type1 == com_type_file )
+	{
+		printoutc(parameter->data1.file_descriptor, header, PACKAGE_VERSION);
+		printoutc(parameter->data1.file_descriptor, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d", _getpid(),
+			switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5],
+			qtime());
+		if (mgmt_socket)
+		{
+			printoutc(parameter->data1.file_descriptor, "mgmt %s perm 0%03o", mgmt_socket, mgmt_mode);
+		}
+	}
 	return 0;
 }
 
@@ -473,18 +482,20 @@ int help(FILE* fd, char* arg)
 	return 0;
 }
 
-int handle_cmd(int type, SOCKET fd, char* input_buffer)
+int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 {
 	struct comlist* p;
 	int rv = ENOSYS;
 	char* outbuf=NULL;
 	size_t outbufsize=0;
-	struct _memory_stream * f = NULL;
+	struct _memory_stream * memStream = NULL;
+	struct comparameter parameter;
 	if (!input_buffer)
 	{
 		errno = EINVAL;
 		return -1;
 	}
+	
 	while (*input_buffer == ' ' || *input_buffer == '\t')
 	{
 		input_buffer++;
@@ -492,88 +503,155 @@ int handle_cmd(int type, SOCKET fd, char* input_buffer)
 	if (*input_buffer != '\0' && *input_buffer != '#')
 	{
 
-		f = open_memorystream(&outbuf, &outbufsize);
-		for (p = clh; p != NULL && (p->doit == NULL || strncmp(p->path, input_buffer, strlen(p->path)) != 0); p = p->next)
+		memStream = open_memorystream(&outbuf, &outbufsize);
+		if (memStream)
 		{
-			;
-		}
-		if (p != NULL)
-		{
-			input_buffer += strlen(p->path);
-			while (*input_buffer == ' ' || *input_buffer == '\t')
+
+			
+			for (p = clh; p != NULL && (p->doit == NULL || strncmp(p->path, input_buffer, strlen(p->path)) != 0); p = p->next)
 			{
-				input_buffer++;
+				;
 			}
-			if (p->type & WITHFD)
+			if (p != NULL)
 			{
-				if (fd >= 0)
+				input_buffer += strlen(p->path);
+				while (*input_buffer == ' ' || *input_buffer == '\t')
 				{
-					if (p->type & WITHFILE)
+					input_buffer++;
+				}
+				if (p->type & WITHFD)
+				{
+					if (socketDescriptor >= 0)
 					{
-						write_memorystream(f, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));
-						switch (p->type & ~(WITHFILE | WITHFD))
+						if (p->type & WITHFILE)
 						{
-							case NOARG: rv = p->doit(f, fd); break;
-							case INTARG: rv = p->doit(f, fd, atoi(input_buffer)); break;
-							case STRARG: rv = p->doit(f, fd, input_buffer); break;
+							write_memorystream(memStream, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));
+							parameter.type1 = com_type_memstream;
+							parameter.data1.mem_stream = memStream;
+							parameter.type2 = com_type_socket;
+							parameter.data2.socket = socketDescriptor;
+							switch (p->type & ~(WITHFILE | WITHFD))
+							{
+								case NOARG: 
+									parameter.paramType = com_param_type_null;
+									rv = p->doit(&parameter); 
+								break;
+								case INTARG: 
+									parameter.paramType = com_param_type_int;
+									parameter.paramValue.intValue = atoi(input_buffer);
+									rv = p->doit(&parameter); 
+								break;
+								case STRARG: 
+									parameter.paramType = com_param_type_string;
+									parameter.paramValue.stringValue = input_buffer;
+									rv = p->doit(parameter); 
+								break;
+							}
+							write_memorystream(memStream, ".", strlen("."));
 						}
-						write_memorystream(f, ".", strlen("."));
+						else
+						{
+							parameter.type1 = com_type_socket;
+							parameter.data1.socket = socketDescriptor;
+							parameter.type2 = com_type_null;
+							switch (p->type & ~WITHFD)
+							{
+							case NOARG:
+								parameter.paramType = com_param_type_null;
+								rv = p->doit(&parameter); 
+							break;
+							case INTARG:
+								parameter.paramType = com_param_type_int;
+								parameter.paramValue.intValue = atoi(input_buffer);
+								rv = p->doit(&parameter); 
+							break;
+							case STRARG:
+								parameter.paramType = com_param_type_string;
+								parameter.paramValue.stringValue = input_buffer;
+								rv = p->doit(&parameter); 
+							break;
+							}
+						}
 					}
 					else
 					{
-						switch (p->type & ~WITHFD)
-						{
-							case NOARG: rv = p->doit(fd); break;
-							case INTARG: rv = p->doit(fd, atoi(input_buffer)); break;
-							case STRARG: rv = p->doit(fd, input_buffer); break;
-						}
+						rv = EBADF;
 					}
+				}
+				else if (p->type & WITHFILE)
+				{
+					write_memorystream(memStream, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));\
+					parameter.type1 = com_type_memstream;
+					parameter.data1.mem_stream = memStream;
+					parameter.type2 = com_type_null;
+					switch (p->type & ~WITHFILE)
+					{
+					case NOARG: 
+						parameter.paramType = com_param_type_null;
+						rv = p->doit(&parameter); 
+					break;
+					case INTARG: 
+						parameter.paramType = com_param_type_int;
+						parameter.paramValue.intValue= atoi(input_buffer);
+						rv = p->doit(&parameter); 
+					break;
+					case STRARG:
+						parameter.paramType = com_param_type_string;
+						parameter.paramValue.stringValue = input_buffer;
+						rv = p->doit(&parameter); 
+					break;
+					}
+					write_memorystream(memStream, ".", strlen("."));
 				}
 				else
 				{
-					rv = EBADF;
+					parameter.type1 = com_type_null;
+					parameter.type2 = com_type_null;
+					switch (p->type)
+					{
+					case NOARG: 
+						parameter.paramType = com_param_type_null;
+						rv = p->doit(&parameter);
+					break;
+					case INTARG: 
+						parameter.paramType = com_param_type_int;
+						parameter.paramValue.intValue = atoi(input_buffer);
+						rv = p->doit(&parameter); 
+					break;
+					case STRARG: 
+						parameter.paramType = com_param_type_string;
+						parameter.paramValue.stringValue = input_buffer;
+						rv = p->doit(&parameter); 
+					break;
+					}
 				}
 			}
-			else if (p->type & WITHFILE)
+			if (rv == 0)
 			{
-				write_memorystream(f, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));
-				switch (p->type & ~WITHFILE)
-				{
-					case NOARG: rv = p->doit(f); break;
-					case INTARG: rv = p->doit(f, atoi(input_buffer)); break;
-					case STRARG: rv = p->doit(f, input_buffer); break;
-				}
-				write_memorystream(f, ".", strlen("."));
+				write_memorystream(memStream, "1000 Success", strlen("1000 Success"));
 			}
-			else
+			else if (rv > 0)
 			{
-				switch (p->type)
-				{
-					case NOARG: rv = p->doit(); break;
-					case INTARG: rv = p->doit(atoi(input_buffer)); break;
-					case STRARG: rv = p->doit(input_buffer); break;
-				}
+				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				printoutc(memStream, "1%03d %s", rv, errorbuff);
+
+				//write_memorystream(f, "1000 Success", strlen("1000 Success"));
 			}
+
+			if (socketDescriptor >= 0)
+			{
+				get_buffer(memStream);
+				send(socketDescriptor, outbuf, outbufsize, 0);
+			}
+			close_memorystream(memStream);
+			free(outbuf);
 		}
-		if (rv == 0)
+		else
 		{
-			write_memorystream(f, "1000 Success", strlen("1000 Success"));
+			fprintf(stderr,"Failed to open the memory stream\n");
+			errno = ENOMEM;
+			return -1;
 		}
-		else if (rv > 0)
-		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
-			printoutc(f, "1%03d %s", rv, errorbuff);
-			
-			//write_memorystream(f, "1000 Success", strlen("1000 Success"));
-		}
-		
-		if (fd >= 0)
-		{
-			get_buffer(f);
-			send(fd, outbuf, outbufsize,0);
-		}
-		close_memorystream(f);
-		free(outbuf);
 	}
 	return rv;
 }
@@ -628,7 +706,7 @@ static void save_pidfile()
 	fclose(fileHandle);
 }
 
-void eventout(struct dbgcl* cl, ...)
+/* void eventout(struct dbgcl* cl, ...)
 {
 	uint32_t index = 0;
 	va_list arg;
@@ -638,3 +716,4 @@ void eventout(struct dbgcl* cl, ...)
 		va_end(arg);
 	}
 }
+*/

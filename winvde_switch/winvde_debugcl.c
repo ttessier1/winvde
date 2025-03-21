@@ -2,6 +2,8 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include "winvde_debugcl.h"
+#include "winvde_printfunc.h"
+
 
 //#ifdef DEBUGOPT
 
@@ -43,31 +45,34 @@ static char _dbgnl = '\n';
 void debugout(struct dbgcl* cl, const char* format, ...)
 {
 	va_list arg;
-	char* msg;
-	int i;
-	char* header;
+	unsigned short index = 0;
+	char* dbg_header = NULL;
+	char* dbg_msg = NULL;
 	struct iovec iov[] = { {NULL,0},{NULL,0},{&_dbgnl,1} };
 
 	va_start(arg, format);
-	iov[0].iov_len = asprintf(&header, "3%03o %s ", cl->tag & 0777, cl->path);
-	iov[0].iov_base = header;
-	iov[1].iov_len = vasprintf(&msg, format, arg);
-	iov[1].iov_base = msg;
+	iov[0].iov_len = asprintf(&dbg_header, "3%03o %s ", cl->tag & 0777, cl->path);
+	iov[0].iov_base = dbg_header;
+	iov[1].iov_len = vasprintf(&dbg_msg, format, arg);
+	iov[1].iov_base = dbg_msg;
 	va_end(arg);
 
-	for (i = 0; i < cl->nfds; i++)
-		writev(cl->fds[i], iov, 3);
-	free(header);
-	free(msg);
+	for (index = 0; index < cl->nfds; index++)
+	{
+		writev(cl->fds[index], iov, 3);
+	}
+	free(dbg_header);
+	free(dbg_msg);
 }
 
 void eventout(struct dbgcl* cl, ...)
 {
-	int i;
+	unsigned short index;
 	va_list arg;
-	for (i = 0; i < cl->nfun; i++) {
+	for (index = 0; index < cl->nfun; index++)
+	{
 		va_start(arg, cl);
-		(cl->fun[i])(cl, cl->funarg[i], arg);
+		(cl->fun[index])(cl, cl->funarg[index], arg);
 		va_end(arg);
 	}
 }

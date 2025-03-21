@@ -62,3 +62,9 @@ int packetfilter(struct dbgcl* cl, ...);
 #define EVENTOUT(CL, ...) 
 #define PACKETFILTER(CL, PORT, BUF, LEN)  (LEN)  
 #endif */
+
+void adddbgcl(int ncl, struct dbgcl* cl);
+void deldbgcl(int ncl, struct dbgcl* cl);
+void debugout(struct dbgcl* cl, const char* format, ...);
+void eventout(struct dbgcl* cl, ...);
+int packetfilter(struct dbgcl* cl, ...);

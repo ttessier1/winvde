@@ -4,14 +4,14 @@
 #include <errno.h>
 #include "winvde_printfunc.h"
 
-void asprintf(char** buffer, char* fmt, ...)
+size_t asprintf(char** buffer, char* fmt, ...)
 {
 	va_list list;
-	int length = 0;
+	size_t length = 0;
 	if (!buffer)
 	{
 		errno = EINVAL;
-		return;
+		return 0;
 	}
 	va_start(list, fmt);
 	length = vsnprintf(NULL, 0, fmt, list);
@@ -20,33 +20,34 @@ void asprintf(char** buffer, char* fmt, ...)
 	if (*buffer)
 	{
 		va_start(list, fmt);
-		vsnprintf(*buffer, length + 1, fmt, list);
+		length = vsnprintf(*buffer, length + 1, fmt, list);
 		va_end(list);
+		return length;
 	}
 	else
 	{
 		errno = ENOMEM;
-		return;
+		return 0;
 	}
 }
 
-void avsprintf(char** buffer, char* fmt, va_list list)
+size_t vasprintf(char** buffer, char* fmt, va_list list)
 {
-	int length = 0;
+	size_t length = 0;
 	if (!buffer)
 	{
 		errno = EINVAL;
-		return;
+		return 0;
 	}
 	length = vsnprintf(NULL, 0, fmt, list);
 	*buffer = malloc(length + 1);
 	if (*buffer)
 	{
-		vsnprintf(*buffer, length + 1, fmt, list);
+		return vsnprintf(*buffer, length + 1, fmt, list);
 	}
 	else
 	{
 		errno = ENOMEM;
-		return ;
+		return 0;
 	}
 }

@@ -196,9 +196,9 @@ int portsetnumports(int val)
 {
 	if (val > 0) {
 		/*resize structs*/
-		int i;
-		for (i = val; i < numports; i++)
-			if (portv[i] != NULL)
+		int index;
+		for (index = val; index < numports; index++)
+			if (portv[index] != NULL)
 				return EADDRINUSE;
 		portv = realloc(portv, val * sizeof(struct port*));
 		if (portv == NULL) {
@@ -206,42 +206,42 @@ int portsetnumports(int val)
 			printlog(LOG_ERR, "Numport resize failed portv %s", errorbuff);
 			exit(1);
 		}
-		for (i = 0; i < NUMOFVLAN; i++) {
-			if (vlant[i].table) {
-				vlant[i].table = ba_realloc(vlant[i].table, numports, val);
-				if (vlant[i].table == NULL) {
+		for (index = 0; index < NUMOFVLAN; index++) {
+			if (vlant[index].table) {
+				vlant[index].table = ba_realloc(vlant[index].table, numports, val);
+				if (vlant[index].table == NULL) {
 					strerror_s(errorbuff, sizeof(errorbuff), errno);
 					printlog(LOG_ERR, "Numport resize failed vlan tables vlan table %s", errorbuff);
 					exit(1);
 				}
 			}
-			if (vlant[i].bctag) {
-				vlant[i].bctag = ba_realloc(vlant[i].bctag, numports, val);
-				if (vlant[i].bctag == NULL) {
+			if (vlant[index].bctag) {
+				vlant[index].bctag = ba_realloc(vlant[index].bctag, numports, val);
+				if (vlant[index].bctag == NULL) {
 					strerror_s(errorbuff, sizeof(errorbuff), errno);
 					printlog(LOG_ERR, "Numport resize failed vlan tables vlan bctag %s", errorbuff);
 					exit(1);
 				}
 			}
-			if (vlant[i].bcuntag) {
-				vlant[i].bcuntag = ba_realloc(vlant[i].bcuntag, numports, val);
-				if (vlant[i].bcuntag == NULL) {
+			if (vlant[index].bcuntag) {
+				vlant[index].bcuntag = ba_realloc(vlant[index].bcuntag, numports, val);
+				if (vlant[index].bcuntag == NULL) {
 					strerror_s(errorbuff, sizeof(errorbuff), errno);
 					printlog(LOG_ERR, "Numport resize failed vlan tables vlan bctag %s", errorbuff);
 					exit(1);
 				}
 			}
-			if (vlant[i].notlearning) {
-				vlant[i].notlearning = ba_realloc(vlant[i].notlearning, numports, val);
-				if (vlant[i].notlearning == NULL) {
+			if (vlant[index].notlearning) {
+				vlant[index].notlearning = ba_realloc(vlant[index].notlearning, numports, val);
+				if (vlant[index].notlearning == NULL) {
 					strerror_s(errorbuff, sizeof(errorbuff), errno);
 					printlog(LOG_ERR, "Numport resize failed vlan tables vlan notlearning %s", errorbuff);
 					exit(1);
 				}
 			}
 		}
-		for (i = numports; i < val; i++)
-			portv[i] = NULL;
+		for (index = numports; index < val; index++)
+			portv[index] = NULL;
 #ifdef FSTP
 		fstsetnumports(val);
 #endif
@@ -414,36 +414,36 @@ int epclose(char* arg)
 
 int print_ptable(FILE* fd, char* arg)
 {
-	int i;
+	int index;
 	if (*arg != 0) {
-		i = atoi(arg);
-		if (i < 0 || i >= numports)
+		index = atoi(arg);
+		if (index < 0 || index >= numports)
 			return EINVAL;
 		else {
-			return print_port(fd, i, 0);
+			return print_port(fd, index, 0);
 		}
 	}
 	else {
-		for (i = 0; i < numports; i++)
-			print_port(fd, i, 0);
+		for (index = 0; index < numports; index++)
+			print_port(fd, index, 0);
 		return 0;
 	}
 }
 
 int print_ptableall(FILE* fd, char* arg)
 {
-	int i;
+	int index;
 	if (*arg != 0) {
-		i = atoi(arg);
-		if (i < 0 || i >= numports)
+		index = atoi(arg);
+		if (index < 0 || index >= numports)
 			return EINVAL;
 		else {
-			return print_port(fd, i, 1);
+			return print_port(fd, index, 1);
 		}
 	}
 	else {
-		for (i = 0; i < numports; i++)
-			print_port(fd, i, 1);
+		for (index = 0; index < numports; index++)
+			print_port(fd, index, 1);
 		return 0;
 	}
 }
@@ -586,11 +586,11 @@ int vlanprintall(FILE* fd, char* arg)
 
 void vlanprintelem(int vlan, FILE* fd)
 {
-	uint32_t i;
+	uint32_t index;
 	printoutc(fd, "VLAN %04d", vlan);
 	ba_FORALL(1,vlant[vlan].table, (uint32_t)numports,
 		printoutc(fd, " -- Port %04d tagged=%d active=%d status=%s",
-			i, portv[i]->vlanuntag != vlan, portv[i]->ep != NULL, STRSTATUS(i, vlan)), i);
+			index, portv[index]->vlanuntag != vlan, portv[index]->ep != NULL, STRSTATUS(index, vlan)), index);
 }
 
 int vlancreate_nocheck(int vlan)
@@ -628,19 +628,19 @@ int portflag(int op, int f)
 
 int alloc_port(unsigned int portno)
 {
-	int i = portno;
-	if (i == 0) {
+	int index = portno;
+	if (index == 0) {
 		/* take one */
-		for (i = 1; i < numports && portv[i] != NULL &&
-			(portv[i]->ep != NULL || portv[i]->flag & NOTINPOOL); i++)
+		for (index = 1; index < numports && portv[index] != NULL &&
+			(portv[index]->ep != NULL || portv[index]->flag & NOTINPOOL); index++)
 			;
 	}
-	else if (i < 0) /* special case MGMT client port */
-		i = 0;
-	if (i >= numports)
+	else if (index < 0) /* special case MGMT client port */
+		index = 0;
+	if (index >= numports)
 		return -1;
 	else {
-		if (portv[i] == NULL) {
+		if (portv[index] == NULL) {
 			struct port* port;
 			if ((port = malloc(sizeof(struct port))) == NULL) {
 				strerror_s(errorbuff, sizeof(errorbuff), errno);
@@ -653,7 +653,7 @@ int alloc_port(unsigned int portno)
 				DBGOUT(DBGPORTNEW, "%02d", i);
 				EVENTOUT(DBGPORTNEW, i);
 #endif
-				portv[i] = port;
+				portv[index] = port;
 				port->ep = NULL;
 				port->user = port->group = port->curuser = -1;
 #ifdef FSTP
@@ -668,32 +668,32 @@ int alloc_port(unsigned int portno)
 				port->flag = 0;
 				port->sender = NULL;
 				port->vlanuntag = 0;
-				ba_set(vlant[0].table, i);
+				ba_set(vlant[0].table, index);
 			}
 		}
-		return i;
+		return index;
 	}
 }
 
-int print_port(FILE* fd, int i, int inclinactive)
+int print_port(FILE* fd, int index, int inclinactive)
 {
 	struct endpoint* ep;
-	if (portv[i] != NULL && (inclinactive || portv[i]->ep != NULL)) {
+	if (portv[index] != NULL && (inclinactive || portv[index]->ep != NULL)) {
 		printoutc(fd, "Port %04d untagged_vlan=%04d %sACTIVE - %sUnnamed Allocatable",
-			i, portv[i]->vlanuntag,
-			portv[i]->ep ? "" : "IN",
-			(portv[i]->flag & NOTINPOOL) ? "NOT " : "");
+			index, portv[index]->vlanuntag,
+			portv[index]->ep ? "" : "IN",
+			(portv[index]->flag & NOTINPOOL) ? "NOT " : "");
 		printoutc(fd, " Current User: %s Access Control: (User: %s - Group: %s)",
-			port_getuser(portv[i]->curuser),
-			port_getuser(portv[i]->user),
-			port_getgroup(portv[i]->group));
+			port_getuser(portv[index]->curuser),
+			port_getuser(portv[index]->user),
+			port_getgroup(portv[index]->group));
 #ifdef PORTCOUNTERS
 		printoutc(fd, " IN:  pkts %10lld          bytes %20lld", portv[i]->pktsin, portv[i]->bytesin);
 		printoutc(fd, " OUT: pkts %10lld          bytes %20lld", portv[i]->pktsout, portv[i]->bytesout);
 #endif
-		for (ep = portv[i]->ep; ep != NULL; ep = ep->next) {
+		for (ep = portv[index]->ep; ep != NULL; ep = ep->next) {
 			printoutc(fd, "  -- endpoint ID %04d module %-12s: %s", ep->fd_ctl,
-				portv[i]->ms->modname, (ep->descr) ? ep->descr : "no endpoint description");
+				portv[index]->ms->modname, (ep->descr) ? ep->descr : "no endpoint description");
 #ifdef VDE_PQ2
 			printoutc(fd, "              unsent packets: %d max %d", ep->vdepq_count, ep->vdepq_max);
 #endif
@@ -710,9 +710,9 @@ void free_port(unsigned int portno)
 		struct port* port = portv[portno];
 		if (port != NULL && port->ep == NULL) {
 			portv[portno] = NULL;
-			int i;
+			int index;
 			/* delete completely the port. all vlan defs zapped */
-			bac_FORALL(1,validvlan, NUMOFVLAN, ba_clr(vlant[i].table, portno), i);
+			bac_FORALL(1,validvlan, NUMOFVLAN, ba_clr(vlant[index].table, portno), index);
 			free(port);
 		}
 	}
@@ -735,7 +735,7 @@ int close_ep_port_fd(int portno, int fd_ctl)
 				port->ms = NULL;
 				port->sender = NULL;
 				port->curuser = -1;
-				int i;
+				int index;
 				/* inactivate port: all active vlan defs cleared 
 				bac_FORALL(validvlan, NUMOFVLAN, ({
 							ba_clr(vlant[i].bctag,portno);
@@ -749,7 +749,7 @@ int close_ep_port_fd(int portno, int fd_ctl)
 							fstdelport(i,portno);
 					}), i);
 #else
-				bac_FORALL(1,validvlan, NUMOFVLAN,ba_clr(vlant[i].bctag,portno), i);
+				bac_FORALL(1,validvlan, NUMOFVLAN,ba_clr(vlant[index].bctag,portno), index);
 #endif
 
 
@@ -768,7 +768,7 @@ int close_ep_port_fd(int portno, int fd_ctl)
 
 void vlanprintactive(int vlan, FILE* fd)
 {
-	int i;
+	int index;
 	printoutc(fd, "VLAN %04d", vlan);
 #ifdef FSTP
 	if (pflag & FSTP_TAG) {
@@ -807,11 +807,11 @@ void vlanprintactive(int vlan, FILE* fd)
 				{
 					if (__v & 1)
 					{
-						(i) = __i * __VDEWORDSIZE + __j;
-						int tagged = portv[i]->vlanuntag != vlan; 
-						if (portv[i]->ep)
+						(index) = __i * __VDEWORDSIZE + __j;
+						int tagged = portv[index]->vlanuntag != vlan; 
+						if (portv[index]->ep)
 						{
-							printoutc(fd, " -- Port %04d tagged=%d active=1 status=%s", i, tagged, STRSTATUS(i, vlan));
+							printoutc(fd, " -- Port %04d tagged=%d active=1 status=%s", index, tagged, STRSTATUS(index, vlan));
 						}
 					}
 				}

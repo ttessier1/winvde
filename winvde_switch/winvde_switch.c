@@ -290,10 +290,10 @@ void CleanUp()
 
 struct option* optcpy(struct option* tgt, struct option* src, int n, int tag)
 {
-    int i;
+    int index;
     memcpy(tgt, src, sizeof(struct option) * n);
-    for (i = 0; i < n; i++) {
-        tgt[i].val = (tgt[i].val & 0xffff) | tag << 16;
+    for (index = 0; index < n; index++) {
+        tgt[index].val = (tgt[index].val & 0xffff) | tag << 16;
     }
     return tgt + n;
 }
@@ -335,9 +335,9 @@ int parse_globopt(int c, char* optarg)
             Usage();
         }
         else {
-            int i;
-            for (i = 0; i < ETH_ALEN; i++)
-                switchmac[i] = maci[i];
+            int index;
+            for (index = 0; index < ETH_ALEN; index++)
+                switchmac[index] = maci[index];
         }
     }
     break;
@@ -390,7 +390,7 @@ void ParseArguments(const int argc, const char** argv)
     if (long_options == NULL || optstring == NULL)
         exit(2);
     { /* fill-in the long_options fields */
-        int i;
+        int index;
         char* os = optstring;
         char last = 0;
         struct option* opp = long_options;
@@ -400,13 +400,13 @@ void ParseArguments(const int argc, const char** argv)
             opp = optcpy(opp, module->module_options, module->options, module->module_tag);
         }
         optcpy(opp, &optail, 1, 0);
-        for (i = 0; i < totopts - 1; i++)
+        for (index = 0; index < totopts - 1; index++)
         {
-            int val = long_options[i].val & 0xffff;
+            int val = long_options[index].val & 0xffff;
             if (val > ' ' && val <= '~' && val != last)
             {
                 *os++ = val;
-                if (long_options[i].has_arg) *os++ = ':';
+                if (long_options[index].has_arg) *os++ = ':';
             }
         }
         *os = 0;
@@ -519,7 +519,7 @@ void main_loop()
 {
     time_t now;
     int error_count = 0;
-    int n, i;
+    int n, index;
     while (1) {
         n = select(number_of_filedescriptors, fds, NULL,NULL,NULL);
         now = qtime();
@@ -540,12 +540,12 @@ void main_loop()
             }
         }
         else {
-            for (i = 0; /*i < number_of_filedescriptors &&*/ n > 0; i++) {
-                if (fds[i].revents != 0) {
+            for (index = 0; /*i < number_of_filedescriptors &&*/ n > 0; index++) {
+                if (fds[index].revents != 0) {
                     int prenfds = number_of_filedescriptors;
                     n--;
-                    fdpp[i]->timestamp = now;
-                    TYPE2MGR(fdpp[i]->type).handle_io(fdpp[i]->type, fds[i].fd, fds[i].revents, fdpp[i]->private_data);
+                    fdpp[index]->timestamp = now;
+                    TYPE2MGR(fdpp[index]->type).handle_io(fdpp[index]->type, fds[index].fd, fds[index].revents, fdpp[index]->private_data);
                     if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
                         break; /* PERFORMANCE it is faster returning to poll */
                 }

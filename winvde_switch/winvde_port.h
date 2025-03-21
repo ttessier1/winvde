@@ -31,7 +31,7 @@ void vlanprintelem(int vlan, FILE* fd);
 int vlancreate_nocheck(int vlan);
 int portflag(int op, int f);
 int alloc_port(unsigned int portno);
-int print_port(FILE* fd, int i, int inclinactive);
+int print_port(FILE* fd, int index, int inclinactive);
 void free_port(unsigned int portno);
 int close_ep_port_fd(int portno, int fd_ctl);
 void vlanprintactive(int vlan, FILE* fd);
