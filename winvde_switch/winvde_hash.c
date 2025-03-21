@@ -13,6 +13,8 @@
 #include "winvde_gc.h"
 #include "winvde_output.h"
 #include "winvde_loglevel.h"
+#include "winvde_debugcl.h"
+#include "winvde_debugopt.h"
 
 #ifdef DEBUGOPT
 #define DBGHASHNEW (dl) 
@@ -44,9 +46,6 @@ int hash_mask;
 
 #define EMAC2VLAN(X) ((uint16_t) ((X)>>48))
 #define EMAC2VLAN2(X) ((uint32_t) (((X)>>48) &0xff)), ((uint32_t) (((X)>>56) &0xff))
-
-
-
 
 #define extmac(MAC,VLAN) \
 	    ((*(uint32_t *) &((MAC)[0])) + ((uint64_t) ((*(uint16_t *) &((MAC)[4]))+ ((uint64_t) (VLAN) << 16)) << 32))

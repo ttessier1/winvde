@@ -105,7 +105,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUGOPT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <StringPooling>
       </StringPooling>
@@ -126,7 +126,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUGOPT</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
@@ -165,6 +165,8 @@
     <ClInclude Include="bitarray.h" />
     <ClInclude Include="winvde.h" />
     <ClInclude Include="winvde_common.h" />
+    <ClInclude Include="winvde_debugopt.c" />
+    <ClInclude Include="winvde_debugopt.h" />
     <ClInclude Include="winvde_descriptor.h" />
     <ClInclude Include="winvde_ev.h" />
     <ClInclude Include="winvde_getopt.h" />

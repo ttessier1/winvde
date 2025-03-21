@@ -21,7 +21,7 @@ struct pollplus** fdpp = NULL;
 #define FDPERMSIZE_LOGSTEP 4
 
 short* fdperm;
-int fdpermsize = 0;
+uint64_t fdpermsize = 0;
 
 uint32_t number_of_filedescriptors = 0;
 

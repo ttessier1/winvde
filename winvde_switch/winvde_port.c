@@ -12,6 +12,22 @@
 #include "winvde_output.h"
 #include "bitarray.h"
 #include "winvde_loglevel.h"
+#include "winvde_debugcl.h"
+#include "winvde_debugopt.h"
+
+#define D_PACKET 01000
+#define D_MGMT 02000
+#define D_IN 01
+#define D_OUT 02
+#define D_PLUS 01
+#define D_MINUS 02
+#define D_DESCR 03
+#define D_STATUS 04
+#define D_ROOT 05
+#define D_HASH 010
+#define D_PORT 020
+#define D_EP 030
+#define D_FSTP 040
 
 #ifdef DEBUGOPT
 #define DBGPORTNEW (dl) 
@@ -21,7 +37,7 @@
 #define DBGEPDEL (dl+4) 
 #define PKTFILTIN (dl+5)
 #define PKTFILTOUT (dl+6)
-static struct dbgcl dl[] = {
+struct dbgcl dl[] = {
 	  {"port/+","new port",D_PORT | D_PLUS},
 		{"port/-","closed port",D_PORT | D_MINUS},
 		{"port/descr","set port description",D_PORT | D_DESCR},
@@ -121,7 +137,7 @@ char* port_getuser(int uid);
 char* port_getgroup(int gid);
 int rec_close_ep(struct endpoint** pep, int fd_ctl);
 */
-static struct comlist cl[] = {
+struct comlist cl[] = {
 	{"port","============","PORT STATUS MENU",NULL,NOARG},
 	{"port/showinfo","","show port info",port_showinfo,NOARG | WITHFILE},
 	{"port/setnumports","N","set the number of ports",portsetnumports,INTARG},
@@ -650,8 +666,8 @@ int alloc_port(unsigned int portno)
 			else
 			{
 #ifdef DEBUGOPT
-				DBGOUT(DBGPORTNEW, "%02d", i);
-				EVENTOUT(DBGPORTNEW, i);
+				DBGOUT(DBGPORTNEW, "%02d", index);
+				EVENTOUT(DBGPORTNEW, index);
 #endif
 				portv[index] = port;
 				port->ep = NULL;

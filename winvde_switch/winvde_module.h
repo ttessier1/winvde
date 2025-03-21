@@ -8,7 +8,7 @@ struct winvde_module {
 	char module_tag;   /* module tag - computer by the load sequence */
 	uint16_t options; /* number of options for getopt */
 	struct option* module_options; /* options for getopt */
-	void (*usage)(void); /* usage function: command line opts explanation */
+	void (*usage)(); /* usage function: command line opts explanation */
 	int (*parse_options)(const int parm, const char* optarg); /* parse getopt output */
 	void (*init)(void); /* init */
 	void (*handle_io)(unsigned char type, SOCKET fd, int revents, void* private_data); /* handle input */

@@ -22,7 +22,7 @@ extern struct pollplus** fdpp ;
 
 extern short* fdperm;
 
-extern int fdpermsize;
+extern uint64_t fdpermsize;
 
 #define TYPEMASK 0x7f
 

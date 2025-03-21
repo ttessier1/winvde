@@ -19,7 +19,7 @@ union com_data_file
 {
 	FILE * file_descriptor;
 	SOCKET socket;
-	struct _memory_stream* mem_stream;
+	struct _memory_file* mem_stream;
 };
 
 enum com_the_parameter_type {
@@ -71,7 +71,7 @@ typedef struct comlist {
 	char* path;
 	char* syntax;
 	char* help;
-	int (*doit)();
+	int (*doit)(struct comparameter *parameter);
 	unsigned char type;
 	struct comlist* next;
 }COMLIST,*LPCOMLIST;

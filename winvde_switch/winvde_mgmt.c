@@ -27,9 +27,10 @@
 #include "winvde_descriptor.h"
 #include "winvde_type.h"
 #include "winvde_debugcl.h"
+#include "winvde_debugopt.h"
 #include "winvde_memorystream.h"
 
-//#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 #define DBGCLSTEP 8
 
 #define MGMTPORTNEW (dl) 
@@ -40,7 +41,7 @@ static struct dbgcl dl[] = {
 	{"mgmt/-",NULL,D_MGMT | D_MINUS},
 	{"sig/hup",NULL,D_SIG | D_HUP}
 };
-//#endif
+#endif
 
 // defines
 #define Nlong_options (sizeof(long_options)/sizeof(struct option));
@@ -65,7 +66,7 @@ int vde_shutdown(struct comparameter* parameter);
 int mgmt_showinfo(struct comparameter* parameter);
 int runscript(struct comparameter* parameter);
 void save_pidfile();
-
+void sighupmgmt(int signo);
 
 
 static struct comlist cl[] = {
@@ -74,13 +75,13 @@ static struct comlist cl[] = {
 	{"shutdown","","shutdown of the switch",vde_shutdown,NOARG},
 	{"showinfo","","show switch version and info",mgmt_showinfo,NOARG | WITHFILE},
 	{"load","path","load a configuration script",runscript,STRARG | WITHFD},
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 	{"debug","============","DEBUG MENU",NULL,NOARG},
 	{"debug/list","","list debug categories",debuglist,STRARG | WITHFILE | WITHFD},
 	{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD | STRARG},
 	{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD | STRARG},
 #endif
-#ifdef VDEPLUGIN
+#if defined(VDEPLUGIN)
 	{"plugin","============","PLUGINS MENU",NULL,NOARG},
 	{"plugin/list","","list plugins",pluginlist,STRARG | WITHFILE},
 	{"plugin/add","library","load a plugin",pluginadd,STRARG},
@@ -89,7 +90,7 @@ static struct comlist cl[] = {
 };
 
 // globals
-static struct option long_options[] = {
+struct option long_options[] = {
 	{"daemon", 0, 0, 'd'},
 	{"pidfile", 1, 0, 'p'},
 	{"rcfile", 1, 0, 'f'},
@@ -137,11 +138,11 @@ void StartConsMgmt(void)
 	mgmgt_module.cleanup = mgmt_cleanup;
 	ADDCL(cl);
 #if defined(DEBUGOPT)
-	ADDDBCLI(dl);
+	ADDDBGCL(dl);
 #endif
 	add_module(&mgmgt_module);
 #if defined(DEBUGOPT)
-	signal(SIGHUP, sighuopmgmt());
+	signal(SIGHUP, sighupmgmt);
 #endif
 }
 
@@ -297,6 +298,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 	struct sockaddr addr;
 	int one = 1;
 	SOCKET new = INVALID_SOCKET;
+	struct comparameter parameter = { 0 };
 	int len;
 	if (type != mgmt_ctl)
 	{
@@ -320,7 +322,12 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 			else
 			{
 #ifdef DEBUGOPT
-				debugdel(fd, "");
+				parameter.type1 = com_type_socket;
+				parameter.data1.socket = fd;
+				parameter.type2 = com_type_null;
+				parameter.paramType = com_param_type_string;
+				parameter.paramValue.stringValue = "";
+				debugdel(&parameter);
 #endif
 				remove_fd(fd);
 			}
@@ -344,7 +351,12 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 					send(fd, EOS, (int)strlen(EOS),0);
 #ifdef DEBUGOPT
 					EVENTOUT(MGMTPORTDEL, fd);
-					debugdel(fd, "");
+					parameter.type1 = com_type_socket;
+					parameter.data1.socket = fd;
+					parameter.type2 = com_type_null;
+					parameter.paramType = com_param_type_string;
+					parameter.paramValue.stringValue = "";
+					debugdel(&parameter);
 #endif
 					remove_fd(fd);
 				}
@@ -403,7 +415,7 @@ void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
 
 }
 
-static int vde_logout(struct comparameter * parameter)
+int vde_logout(struct comparameter * parameter)
 {
 	if (!parameter)
 	{
@@ -418,7 +430,7 @@ static int vde_logout(struct comparameter * parameter)
 	return -1;
 }
 
-static int vde_shutdown(struct comparameter* parameter)
+int vde_shutdown(struct comparameter* parameter)
 {
 	if (!parameter)
 	{
@@ -507,6 +519,7 @@ int runscript(struct comparameter* parameter)
 			}
 		}
 	}
+	return 0;
 }
 
 int help(struct comparameter* parameter)
@@ -544,9 +557,10 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 	struct comlist* p;
 	int rv = ENOSYS;
 	char* outbuf=NULL;
-	size_t outbufsize=0;
-	struct _memory_stream * memStream = NULL;
+	size_t * outbufsize=0;
+	struct _memory_file* memStream = NULL;
 	struct comparameter parameter;
+	char* sprintBuff = NULL;
 	if (!input_buffer)
 	{
 		errno = EINVAL;
@@ -601,7 +615,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 								case STRARG: 
 									parameter.paramType = com_param_type_string;
 									parameter.paramValue.stringValue = input_buffer;
-									rv = p->doit(parameter); 
+									rv = p->doit(&parameter); 
 								break;
 							}
 							write_memorystream(memStream, ".", strlen("."));
@@ -690,7 +704,11 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 			else if (rv > 0)
 			{
 				strerror_s(errorbuff, sizeof(errorbuff), errno);
-				printoutc(memStream, "1%03d %s", rv, errorbuff);
+				if (asprintf(&sprintBuff, "1%03d %s", rv, errorbuff)!=-1)
+				{
+
+					write_memorystream(memStream, sprintBuff, strlen(sprintBuff));
+				}
 
 				//write_memorystream(f, "1000 Success", strlen("1000 Success"));
 			}
@@ -698,7 +716,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 			if (socketDescriptor >= 0)
 			{
 				get_buffer(memStream);
-				send(socketDescriptor, outbuf, outbufsize, 0);
+				send(socketDescriptor, outbuf, (int)*outbufsize, 0);
 			}
 			close_memorystream(memStream);
 			free(outbuf);
@@ -762,7 +780,7 @@ void RunDaemon()
 
 }
 
-static void save_pidfile()
+void save_pidfile()
 {
 	if (pidfile[0] != '/')
 	{
@@ -787,14 +805,9 @@ static void save_pidfile()
 	fclose(fileHandle);
 }
 
-/* void eventout(struct dbgcl* cl, ...)
+#ifdef DEBUGOPT
+void sighupmgmt(int signo)
 {
-	uint32_t index = 0;
-	va_list arg;
-	for (index = 0; index < cl->nfun; index++) {
-		va_start(arg, cl);
-		(cl->fun[index])(cl, cl->funarg[index], arg);
-		va_end(arg);
-	}
+	EVENTOUT(MGMTSIGHUP, signo);
 }
-*/
+#endif

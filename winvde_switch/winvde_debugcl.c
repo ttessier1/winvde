@@ -14,15 +14,15 @@ struct dbgcl* dbgclh = NULL;
 
 struct dbgcl** dbgclt = &dbgclh;
 
-void adddbgcl(int ncl, struct dbgcl* cl)
+void adddbgcl(size_t ncl, struct dbgcl* cl)
 {
-	uint32_t index = 0;
+	size_t index = 0;
 	if (ncl <= 0||!cl)
 	{
 		errno = EINVAL;
 		return;
 	}
-	for (index = 0; index < (uint32_t)ncl; index++, cl++)
+	for (index = 0; index < ncl; index++, cl++)
 	{
 		cl->next = NULL;
 		(*dbgclt) = cl;
@@ -30,9 +30,9 @@ void adddbgcl(int ncl, struct dbgcl* cl)
 	}
 }
 
-void deldbgcl(int ncl, struct dbgcl* cl)
+void deldbgcl(size_t ncl, struct dbgcl* cl)
 {
-	uint32_t index;
+	size_t index;
 	if (ncl <= 0 || cl == NULL)
 	{
 		errno = EINVAL;
@@ -54,7 +54,7 @@ void deldbgcl(int ncl, struct dbgcl* cl)
 	}
 }
 
-static char _dbgnl = '\n';
+char _dbgnl = '\n';
 void debugout(struct dbgcl* cl, const char* format, ...)
 {
 	va_list arg;

@@ -100,7 +100,7 @@ int main(const int argc, const char ** argv)
 
     fprintf(stdout, "Arguments Parsed\n");
 
-    atexit(&CleanUp);
+    atexit(CleanUp);
 
     // Needed before hash functions
     qtimer_init();
@@ -525,7 +525,7 @@ void main_loop()
     int error_count = 0;
     int n, index;
     while (1) {
-        n = select(number_of_filedescriptors, fds, NULL,NULL,NULL);
+        n = WSAPoll(fds,number_of_filedescriptors, 0);
         now = qtime();
         if (n < 0) {
             if (errno != EINTR)
