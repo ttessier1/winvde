@@ -102,6 +102,9 @@ int main(const int argc, const char ** argv)
 
     atexit(&CleanUp);
 
+    // Needed before hash functions
+    qtimer_init();
+
     HashInit(hash_size);
 
 #ifdef FSTP
@@ -110,12 +113,13 @@ int main(const int argc, const char ** argv)
 
     port_init(numports);
 
+    
 
     init_mods();
 
     loadrcfile();
     
-    qtimer_init();
+    
     
     main_loop();
 

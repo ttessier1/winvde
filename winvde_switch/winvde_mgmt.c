@@ -456,10 +456,10 @@ int mgmt_showinfo(struct comparameter* parameter)
 }
 
 int runscript(struct comparameter* parameter)
-	// SOCKET fd, char* path)
 {
 	size_t len = 0;
 	FILE* script_file = NULL;
+	char buf[MAXCMD];
 	if (!parameter)
 	{
 		errno = EINVAL;
@@ -472,37 +472,39 @@ int runscript(struct comparameter* parameter)
 		parameter->paramValue.stringValue != NULL
 	)
 	{
-		script_file = fopen(parameter->paramValue.stringValue, "r");
-		char buf[MAXCMD];
-		if (script_file == NULL)
+		if (fopen_s(&script_file, parameter->paramValue.stringValue, "r") == 0)
 		{
-			return errno;
-		}
-		else
-		{
-			while (fgets(buf, MAXCMD, script_file) != NULL)
+
+			if (script_file == NULL)
 			{
-				if (strlen(buf) > 1 && buf[strlen(buf) - 1] == '\n')
-				{
-					buf[strlen(buf) - 1] = '\0';
-				}
-				if (parameter->data1.socket != INVALID_SOCKET)
-				{
-					char* scriptprompt = NULL;
-					asprintf(&scriptprompt, "vde[%s]: %s\n", parameter->paramValue.stringValue, buf);
-					len = strlen(scriptprompt);
-					if (len > INT_MAX)
-					{
-						fprintf(stderr, "Failed to write more than INT_MAX bytes: %lld\n", len);
-						return -1;
-					}
-					send(parameter->data1.socket, scriptprompt, (int)len, 0);
-					free(scriptprompt);
-				}
-				handle_cmd(mgmt_data, parameter->data1.socket, buf);
+				return errno;
 			}
-			fclose(script_file);
-			return 0;
+			else
+			{
+				while (fgets(buf, MAXCMD, script_file) != NULL)
+				{
+					if (strlen(buf) > 1 && buf[strlen(buf) - 1] == '\n')
+					{
+						buf[strlen(buf) - 1] = '\0';
+					}
+					if (parameter->data1.socket != INVALID_SOCKET)
+					{
+						char* scriptprompt = NULL;
+						asprintf(&scriptprompt, "vde[%s]: %s\n", parameter->paramValue.stringValue, buf);
+						len = strlen(scriptprompt);
+						if (len > INT_MAX)
+						{
+							fprintf(stderr, "Failed to write more than INT_MAX bytes: %lld\n", len);
+							return -1;
+						}
+						send(parameter->data1.socket, scriptprompt, (int)len, 0);
+						free(scriptprompt);
+					}
+					handle_cmd(mgmt_data, parameter->data1.socket, buf);
+				}
+				fclose(script_file);
+				return 0;
+			}
 		}
 	}
 }
@@ -714,18 +716,42 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 void loadrcfile(void)
 {
 	size_t size;
+	struct comparameter parameter;
 	if (rcfile != NULL)
-		runscript(-1, rcfile);
-	else {
+	{
+		parameter.type1 = com_type_socket;
+		parameter.data1.socket = INVALID_SOCKET;
+		parameter.type2 = com_type_null;
+		parameter.paramType = com_param_type_string;
+		parameter.paramValue.stringValue = rcfile;
+		runscript(&parameter);
+	}
+	else
+	{
 		char path[MAX_PATH];
 		char home[MAX_PATH];
 		getenv_s(&size, home, sizeof(home), "USERPROFILE");
 		snprintf(path, MAX_PATH, "%s\\.vde2\\vde_switch.rc", home);
 		if (_access(path, R_OK) == 0)
-			runscript(-1, path);
-		else {
+		{
+			parameter.type1 = com_type_socket;
+			parameter.data1.socket = INVALID_SOCKET;
+			parameter.type2 = com_type_null;
+			parameter.paramType = com_param_type_string;
+			parameter.paramValue.stringValue = path;
+			runscript(&parameter);
+		}
+		else
+		{
 			if (_access(STDRCFILE, R_OK) == 0)
-				runscript(-1, STDRCFILE);
+			{
+				parameter.type1 = com_type_socket;
+				parameter.data1.socket = INVALID_SOCKET;
+				parameter.type2 = com_type_null;
+				parameter.paramType = com_param_type_string;
+				parameter.paramValue.stringValue = STDRCFILE;
+				runscript(&parameter);
+			}
 		}
 	}
 }
@@ -748,7 +774,7 @@ static void save_pidfile()
 	
 	FILE* fileHandle = NULL;
 	errno = fopen_s(&fileHandle, pidfile_path, "w");
-	if (errno == -1 || fileHandle==NULL) {
+	if (errno != 0 || fileHandle==NULL) {
 		strerror_s(errorbuff,sizeof(errorbuff),errno);
 		printlog(LOG_ERR, "Error in pidfile creation: %s",errorbuff);
 		exit(1);

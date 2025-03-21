@@ -35,7 +35,7 @@ int timer_count;// timer id count
 int ss_alarm, ss_old;
 UINT_PTR timerId = 0;
 
-HANDLE ghMutex = NULL;
+HANDLE ghMutex = INVALID_HANDLE_VALUE;
 
 time_t qtime()
 {
@@ -45,28 +45,42 @@ time_t qtime()
 int qtime_csenter()
 {
 	DWORD dwWaitResult = 0;
-
-	dwWaitResult = WaitForSingleObject(
-		ghMutex,    // handle to mutex
-		INFINITE);  // no time-out interval
-	switch (dwWaitResult)
+	if (ghMutex != INVALID_HANDLE_VALUE)
 	{
-	case WAIT_OBJECT_0:
+		dwWaitResult = WaitForSingleObject(
+			ghMutex,    // handle to mutex
+			INFINITE);  // no time-out interval
+		switch (dwWaitResult)
+		{
+		case WAIT_OBJECT_0:
 
-		break;
-	case WAIT_ABANDONED:
-		fprintf(stderr, "Wait Abandoned: %d\n", GetLastError());
+			break;
+		case WAIT_ABANDONED:
+			fprintf(stderr, "Wait Abandoned: %d\n", GetLastError());
+			return -1;
+			break;
+		}
+	}
+	else
+	{
+		fprintf(stderr, __FUNCTION__ ": Mutex Not Initialized\n");
 		return -1;
-		break;
 	}
 	return 0;
 }
 
 void qtime_csexit()
 {
-	if (!ReleaseMutex(ghMutex))
+	if (ghMutex != INVALID_HANDLE_VALUE)
 	{
-		fprintf(stderr, "Wait Abandoned: %d\n", GetLastError());
+		if (!ReleaseMutex(ghMutex))
+		{
+			fprintf(stderr, __FUNCTION__ "Failed to release the mutex: %d\n", GetLastError());
+		}
+	}
+	else
+	{
+		fprintf(stderr, __FUNCTION__ ": Mutex Not Initialized\n");
 	}
 }
 
@@ -114,11 +128,10 @@ void sig_alarm(HWND unnamedParam1,UINT unnamedParam2,UINT_PTR unnamedParam3,DWOR
 
 int qtimer_init()
 {
-	signal(SIGALARM, sig_alarm);
-
 	ghMutex = CreateMutex(NULL, FALSE, NULL);
 	if (!ghMutex)
 	{
+		fprintf(stderr, __FUNCTION__ ":Failed to create the mutex\n");
 		errno = EINVAL;
 		return -1;
 	}
@@ -142,7 +155,7 @@ unsigned int qtimer_add(time_t period, int times, void(*call)(), void * arg)
 		if (active_timers >= qt_size)
 		{
 			int newmaxqt = qt_size + QT_ALLOC_STEP;
-			qt_head = (struct qt_timer*)realloc(qt_head,newmaxqt*sizeof(struct qt_timer *));
+			qt_head = (struct qt_timer**)realloc(qt_head,newmaxqt*sizeof(struct qt_timer *));
 			if (qt_head == NULL)
 			{
 				errno = ENOMEM;
@@ -177,8 +190,13 @@ unsigned int qtimer_add(time_t period, int times, void(*call)(), void * arg)
 
 void qtimer_del(unsigned int timer_id)
 {
-	unsigned int  index = 0;
-	for (index = 0; index < active_timers; index++)
+	uint32_t index = 0;
+	if (active_timers <= 0)
+	{
+		errno = EINVAL;
+		return;
+	}
+	for (index = 0; index < (uint32_t)active_timers; index++)
 	{
 		if (timer_id == qt_head[index]->qt_identifier)
 		{
