@@ -27,6 +27,7 @@
 #include "winvde_descriptor.h"
 #include "winvde_type.h"
 #include "winvde_debugcl.h"
+#include "winvde_memorystream.h"
 
 //#ifdef DEBUGOPT
 #define DBGCLSTEP 8
@@ -478,7 +479,7 @@ int handle_cmd(int type, SOCKET fd, char* input_buffer)
 	int rv = ENOSYS;
 	char* outbuf=NULL;
 	size_t outbufsize=0;
-	FILE* f = NULL;
+	struct _memory_stream * f = NULL;
 	if (!input_buffer)
 	{
 		errno = EINVAL;
@@ -490,7 +491,8 @@ int handle_cmd(int type, SOCKET fd, char* input_buffer)
 	}
 	if (*input_buffer != '\0' && *input_buffer != '#')
 	{
-		f = open_memstream(&outbuf, &outbufsize);
+
+		f = open_memorystream(&outbuf, &outbufsize);
 		for (p = clh; p != NULL && (p->doit == NULL || strncmp(p->path, input_buffer, strlen(p->path)) != 0); p = p->next)
 		{
 			;
@@ -508,14 +510,14 @@ int handle_cmd(int type, SOCKET fd, char* input_buffer)
 				{
 					if (p->type & WITHFILE)
 					{
-						printoutc(f, "0000 DATA END WITH '.'");
+						write_memorystream(f, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));
 						switch (p->type & ~(WITHFILE | WITHFD))
 						{
 							case NOARG: rv = p->doit(f, fd); break;
 							case INTARG: rv = p->doit(f, fd, atoi(input_buffer)); break;
 							case STRARG: rv = p->doit(f, fd, input_buffer); break;
 						}
-						printoutc(f, ".");
+						write_memorystream(f, ".", strlen("."));
 					}
 					else
 					{
@@ -534,14 +536,14 @@ int handle_cmd(int type, SOCKET fd, char* input_buffer)
 			}
 			else if (p->type & WITHFILE)
 			{
-				printoutc(f, "0000 DATA END WITH '.'");
+				write_memorystream(f, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));
 				switch (p->type & ~WITHFILE)
 				{
 					case NOARG: rv = p->doit(f); break;
 					case INTARG: rv = p->doit(f, atoi(input_buffer)); break;
 					case STRARG: rv = p->doit(f, input_buffer); break;
 				}
-				printoutc(f, ".");
+				write_memorystream(f, ".", strlen("."));
 			}
 			else
 			{
@@ -555,18 +557,22 @@ int handle_cmd(int type, SOCKET fd, char* input_buffer)
 		}
 		if (rv == 0)
 		{
-			printoutc(f, "1000 Success");
+			write_memorystream(f, "1000 Success", strlen("1000 Success"));
 		}
 		else if (rv > 0)
 		{
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printoutc(f, "1%03d %s", rv, errorbuff);
+			
+			//write_memorystream(f, "1000 Success", strlen("1000 Success"));
 		}
-		fclose(f);
+		
 		if (fd >= 0)
 		{
+			get_buffer(f);
 			send(fd, outbuf, outbufsize,0);
 		}
+		close_memorystream(f);
 		free(outbuf);
 	}
 	return rv;

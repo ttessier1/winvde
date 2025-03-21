@@ -1,7 +1,3 @@
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <stdio.h>
-
 #include <memory.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -20,7 +16,7 @@ typedef struct _buffer_chain
     char buffer[MEMORY_BUFFER_SIZE];
 } BUFFERCHAIN, * LPBUFFERCHAIN;
 
-typedef struct _memory_file {
+typedef struct _memory_file{
     int fd;             // File descriptor
     size_t buffer_pos;  // Current position in the buffer
     size_t buffer_end;  // End of valid data in the buffer
@@ -30,11 +26,50 @@ typedef struct _memory_file {
     struct _buffer_chain* buffer_chain;
     char* final_buffer;
     char** internal_buffer_ptr;
-} MEMORYFILE, * LPMEMORYFILE;
+} MEMORYFILE, *LPMEMORYFILE;
 
-struct _memory_file* open_memorystream(char** buffer, size_t** size);
+struct _memory_file * open_memorystream(char **buffer ,size_t ** size);
 int write_memorystream(struct _memory_file* file, const char* buff, size_t buffsize);
 char* get_buffer(struct _memory_file* file);
+
+int main()
+{
+    size_t bytes_written = 0;
+    uint32_t index = 0;
+    char* buffer = NULL;
+    char* message = NULL;
+    char* final = NULL;
+    size_t* size = NULL;
+    struct _memory_file* MFILE = NULL;
+    int doContinue = 0;
+    MFILE = open_memorystream(&buffer, &size);
+    if (MFILE != NULL)
+    {
+        doContinue = 1;
+        for (index = 0; index < 103; index++)
+        {
+            message = (char*)"This is a ";
+            bytes_written = write_memorystream(MFILE, message, strlen(message));
+            if (bytes_written == (size_t)(0xFFFFFFFFFFFFFFFF))
+            {
+                fprintf(stderr, "Failed to write to memory stream\n");
+                doContinue = 0;
+                break;
+            }
+        }
+        if (doContinue==1)
+        {
+            final = get_buffer(MFILE);
+            fprintf(stdout, "Full Buffer:%.*s", (int)size, buffer);
+        }
+        close_memorystream(MFILE);
+
+    }
+    else
+    {
+        fprintf(stderr, "Failed to open a memory stream\n");
+    }
+}
 
 struct _memory_file* open_memorystream(char** buffer, size_t** size)
 {
@@ -52,7 +87,7 @@ struct _memory_file* open_memorystream(char** buffer, size_t** size)
         *size = &memorybuffer->size;
         memorybuffer->internal_buffer_ptr = buffer;
 
-        memorybuffer->buffer_chain = (struct _buffer_chain*)malloc(sizeof(struct _buffer_chain));
+        memorybuffer->buffer_chain = (struct _buffer_chain *)malloc(sizeof(struct _buffer_chain));
         if (memorybuffer->buffer_chain)
         {
             memset(memorybuffer->buffer_chain, 0, sizeof(struct _buffer_chain));
@@ -86,15 +121,15 @@ int write_memorystream(struct _memory_file* file, const char* buff, size_t buffs
         return -1;
     }
     remaining = MEMORY_BUFFER_SIZE - file->buffer_pos;
-    memcpy(&file->buffer_chain->buffer[file->buffer_pos], buff, min(remaining, buffsize));
-
+    memcpy(&file->buffer_chain->buffer[file->buffer_pos],buff, min(remaining,buffsize));
+    
     written += min(remaining, buffsize);
     buffoffset += written;
     file->buffer_pos += written;
     file->size += written;
     remaining = remaining - written;
     buffsize = buffsize - written;
-    while (buffsize > 0)
+    while (buffsize>0)
     {
         writtensave += written;
         written = 0;
@@ -137,12 +172,13 @@ char* get_buffer(struct _memory_file* file)
         errno = EINVAL;
         return NULL;
     }
-    file->final_buffer = (char*)malloc(file->size + 1);
+    file->final_buffer = (char*)malloc(file->size+1);
+    
     
     if (file->final_buffer)
     {
-        memset(file->final_buffer, 0, file->size + 1);
         *file->internal_buffer_ptr = file->final_buffer;
+        memset(file->final_buffer, 0, file->size + 1);
         ptr = file->buffer_chain;
         while (ptr->prev)
         {
@@ -150,10 +186,10 @@ char* get_buffer(struct _memory_file* file)
         }
         while (ptr)
         {
-
+            
             if (ptr->next)
             {
-                memcpy(&file->final_buffer[pos], ptr->buffer, MEMORY_BUFFER_SIZE);
+                memcpy(&file->final_buffer[pos], ptr->buffer, MEMORY_BUFFER_SIZE );
                 pos += MEMORY_BUFFER_SIZE;
             }
             else
@@ -161,7 +197,7 @@ char* get_buffer(struct _memory_file* file)
                 memcpy(&file->final_buffer[pos], ptr->buffer, file->buffer_pos);
                 pos += file->buffer_pos;
             }
-
+            
             ptr = ptr->next;
         }
         return file->final_buffer;

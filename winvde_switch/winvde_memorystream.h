@@ -1,4 +1,9 @@
 #pragma once
 #include <stdio.h>
 
-FILE* open_memorystream(char** ptr, size_t* sizeloc);
+typedef struct _memory_file * MFILE;
+
+struct _memory_file* open_memorystream(char** buffer, size_t** size);
+int write_memorystream(struct _memory_file* file, const char* buff, size_t buffsize);
+char* get_buffer(struct _memory_file* file);
+int close_memorystream(struct _memory_file* file);
