@@ -59,12 +59,13 @@ unsigned int mgmt_group = -1;
 char pidfile_path[MAX_PATH];
 
 // forward declarations
-int vde_logout();
-int vde_shutdown();
+int help(struct comparameter* parameter);
+int vde_logout(struct comparameter* parameter);
+int vde_shutdown(struct comparameter* parameter);
 int mgmt_showinfo(struct comparameter* parameter);
+int runscript(struct comparameter* parameter);
 void save_pidfile();
-int runscript(SOCKET fd, char* path);
-int help(FILE* fd, char* arg);
+
 
 
 static struct comlist cl[] = {
@@ -402,15 +403,35 @@ void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
 
 }
 
-static int vde_logout()
+static int vde_logout(struct comparameter * parameter)
 {
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return - 1;
+	}
+	if (parameter->type1 == com_type_null && parameter->type2 == com_type_null && parameter->paramType == com_param_type_null)
+	{
+		printlog(LOG_WARNING, "Logout from mgmt command");
+		return -2;
+	}
 	return -1;
 }
 
-static int vde_shutdown()
+static int vde_shutdown(struct comparameter* parameter)
 {
-	printlog(LOG_WARNING, "Shutdown from mgmt command");
-	return -2;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->type2 == com_type_null && parameter->paramType== com_param_type_null)
+	{
+		printlog(LOG_WARNING, "Shutdown from mgmt command");
+		return -2;
+	}
+	errno = EINVAL;
+	return -1;
 }
 
 int mgmt_showinfo(struct comparameter* parameter)
@@ -434,52 +455,85 @@ int mgmt_showinfo(struct comparameter* parameter)
 	return 0;
 }
 
-int runscript(SOCKET fd, char* path)
+int runscript(struct comparameter* parameter)
+	// SOCKET fd, char* path)
 {
 	size_t len = 0;
-	FILE* f = fopen(path, "r");
-	char buf[MAXCMD];
-	if (f == NULL)
+	FILE* script_file = NULL;
+	if (!parameter)
 	{
-		return errno;
+		errno = EINVAL;
+		return -1;
 	}
-	else
+	if (
+		parameter->type1 == com_type_socket && 
+		parameter->type2 == com_type_null && 
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL
+	)
 	{
-		while (fgets(buf, MAXCMD, f) != NULL)
+		script_file = fopen(parameter->paramValue.stringValue, "r");
+		char buf[MAXCMD];
+		if (script_file == NULL)
 		{
-			if (strlen(buf) > 1 && buf[strlen(buf) - 1] == '\n')
-			{
-				buf[strlen(buf) - 1] = '\0';
-			}
-			if (fd >= 0)
-			{
-				char* scriptprompt = NULL;
-				asprintf(&scriptprompt, "vde[%s]: %s\n", path, buf);
-				len = strlen(scriptprompt);
-				if (len > INT_MAX)
-				{
-					fprintf(stderr, "Failed to write more than INT_MAX bytes: %lld\n",len);
-					return -1;
-				}
-				send(fd, scriptprompt, (int)len,0);
-				free(scriptprompt);
-			}
-			handle_cmd(mgmt_data, fd, buf);
+			return errno;
 		}
-		fclose(f);
-		return 0;
+		else
+		{
+			while (fgets(buf, MAXCMD, script_file) != NULL)
+			{
+				if (strlen(buf) > 1 && buf[strlen(buf) - 1] == '\n')
+				{
+					buf[strlen(buf) - 1] = '\0';
+				}
+				if (parameter->data1.socket != INVALID_SOCKET)
+				{
+					char* scriptprompt = NULL;
+					asprintf(&scriptprompt, "vde[%s]: %s\n", parameter->paramValue.stringValue, buf);
+					len = strlen(scriptprompt);
+					if (len > INT_MAX)
+					{
+						fprintf(stderr, "Failed to write more than INT_MAX bytes: %lld\n", len);
+						return -1;
+					}
+					send(parameter->data1.socket, scriptprompt, (int)len, 0);
+					free(scriptprompt);
+				}
+				handle_cmd(mgmt_data, parameter->data1.socket, buf);
+			}
+			fclose(script_file);
+			return 0;
+		}
 	}
 }
 
-int help(FILE* fd, char* arg)
+int help(struct comparameter* parameter)
 {
-	struct comlist* p;
-	size_t n = strlen(arg);
-	printoutc(fd, "%-18s %-15s %s", "COMMAND PATH", "SYNTAX", "HELP");
-	printoutc(fd, "%-18s %-15s %s", "------------", "--------------", "------------");
-	for (p = clh; p != NULL; p = p->next)
-		if (strncmp(p->path, arg, n) == 0)
-			printoutc(fd, "%-18s %-15s %s", p->path, p->syntax, p->help);
+	struct comlist* p=NULL;
+	size_t n = 0;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && parameter->paramType==com_param_type_string)
+	{
+		strlen(parameter->paramValue.stringValue);
+		printoutc(parameter->data1.file_descriptor, "%-18s %-15s %s", "COMMAND PATH", "SYNTAX", "HELP");
+		printoutc(parameter->data1.file_descriptor, "%-18s %-15s %s", "------------", "--------------", "------------");
+		for (p = clh; p != NULL; p = p->next)
+		{
+			if (strncmp(p->path, parameter->paramValue.stringValue, n) == 0)
+			{
+				printoutc(parameter->data1.file_descriptor, "%-18s %-15s %s", p->path, p->syntax, p->help);
+			}
+		}
+	}
 	return 0;
 }
 

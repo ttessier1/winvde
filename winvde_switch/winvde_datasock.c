@@ -64,7 +64,7 @@ int dirmode = -1;
 
 #define Nlong_options (sizeof(long_options)/sizeof(struct option));
 
-int datasock_showinfo(FILE* fd);
+int datasock_showinfo(struct comparameter*parameter);
 
 static struct comlist cl[] = {
 	{"ds","============","DATA SOCKET MENU",NULL,NOARG},
@@ -81,7 +81,7 @@ static struct mod_support modfun;
 void datasock_init(void);
 void datasock_usage(void);
 int datasock_parse_options(const int c, const char* optarg);
-void datasock_cleanup(unsigned char type, int fd, void* arg);
+void datasock_cleanup(unsigned char type, SOCKET fd, void* arg);
 
 // Entry Point
 void StartDataSock(void)
@@ -100,10 +100,23 @@ void StartDataSock(void)
 
 // function definitions
 
-int datasock_showinfo(FILE* fd)
+int datasock_showinfo(struct comparameter * parameter)
 {
-	printoutc(fd, "ctl dir %s", ctl_socket);
-	printoutc(fd, "std mode 0%03o", mode);
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if(parameter->type1 == com_type_file && parameter->data1.file_descriptor==NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if(parameter->type1 == com_type_file)
+	{
+		printoutc(parameter->data1.file_descriptor, "ctl dir %s", ctl_socket);
+		printoutc(parameter->data1.file_descriptor, "std mode 0%03o", mode);
+	}
 	return 0;
 }
 
