@@ -10,7 +10,12 @@ struct comlist** clt = &clh;
 void addcl(int ncl, struct comlist* cl)
 {
 	uint32_t index=0;
-	for (index = 0; index < ncl; index++, cl++)
+	if (ncl <= 0 || cl == NULL)
+	{
+		errno = EINVAL;
+		return;
+	}
+	for (index = 0; index < (uint32_t)ncl; index++, cl++)
 	{
 		cl->next = NULL;
 		(*clt) = cl;
@@ -21,7 +26,12 @@ void addcl(int ncl, struct comlist* cl)
 void delcl(int ncl, struct comlist* cl)
 {
 	uint32_t index = 0;
-	for (index = 0; index < ncl; index++, cl++) {
+	if (ncl <= 0 || !cl)
+	{
+		errno = EINVAL;
+		return;
+	}
+	for (index = 0; index < (uint32_t)ncl; index++, cl++) {
 		struct comlist** p = &clh;
 		while (*p != NULL) {
 			if (*p == cl)

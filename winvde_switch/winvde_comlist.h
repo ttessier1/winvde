@@ -17,7 +17,7 @@ enum com_param_type {
 
 union com_data_file
 {
-	int file_descriptor;
+	FILE * file_descriptor;
 	SOCKET socket;
 	struct _memory_stream* mem_stream;
 };

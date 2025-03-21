@@ -61,7 +61,7 @@ char pidfile_path[MAX_PATH];
 // forward declarations
 int vde_logout();
 int vde_shutdown();
-int mgmt_showinfo(FILE* fd);
+int mgmt_showinfo(struct comparameter* parameter);
 void save_pidfile();
 int runscript(SOCKET fd, char* path);
 int help(FILE* fd, char* arg);
@@ -296,7 +296,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 	struct sockaddr addr;
 	int one = 1;
 	SOCKET new = INVALID_SOCKET;
-	size_t len;
+	int len;
 	if (type != mgmt_ctl)
 	{
 		if (revents & POLLIN)
@@ -357,7 +357,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 	else
 	{/* mgmt ctl */
 		len = sizeof(addr);
-		new = accept(fd, &addr, &len);
+		new = accept(fd, &addr,  & len);
 		if (new < 0)
 		{
 			strerror_s(errorbuff,sizeof(errorbuff),errno);
@@ -375,8 +375,8 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 		add_fd(new, mgmt_data, NULL);
 		EVENTOUT(MGMTPORTNEW, new);
 		snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
-		send(new, buf, strlen(buf),0);
-		send(new, prompt, strlen(prompt),0);
+		send(new, buf, (int)strlen(buf),0);
+		send(new, prompt, (int)strlen(prompt),0);
 	}
 
 }
@@ -417,7 +417,8 @@ int mgmt_showinfo(struct comparameter* parameter)
 {
 	if (parameter == NULL)
 	{
-		return;
+		errno = EINVAL;
+		return -1;
 	}
 	if (parameter->type1 == com_type_file )
 	{

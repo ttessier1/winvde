@@ -4,7 +4,7 @@
 #include <errno.h>
 #include "winvde_printfunc.h"
 
-size_t asprintf(char** buffer, char* fmt, ...)
+size_t asprintf(char** buffer, const char* fmt, ...)
 {
 	va_list list;
 	size_t length = 0;
@@ -31,7 +31,7 @@ size_t asprintf(char** buffer, char* fmt, ...)
 	}
 }
 
-size_t vasprintf(char** buffer, char* fmt, va_list list)
+size_t vasprintf(char** buffer, const char* fmt, va_list list)
 {
 	size_t length = 0;
 	if (!buffer)
