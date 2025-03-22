@@ -2,6 +2,7 @@
 
 #include <WinSock2.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define NOARG 0
 #define INTARG 1

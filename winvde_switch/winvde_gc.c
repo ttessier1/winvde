@@ -4,6 +4,7 @@
 #include "winvde_gc.h"
 #include "winvde_hash.h"
 #include "winvde_comlist.h"
+#include "winvde_qtimer.h"
 
 
 int gc_interval = 0;

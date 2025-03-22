@@ -30,6 +30,7 @@
 #include "winvde_debugopt.h"
 #include "winvde_event.h"
 #include "winvde_memorystream.h"
+#include "winvde_plugin.h"
 
 #if defined(DEBUGOPT)
 #define DBGCLSTEP 8
@@ -68,7 +69,7 @@ int mgmt_showinfo(struct comparameter* parameter);
 int runscript(struct comparameter* parameter);
 void save_pidfile();
 void sighupmgmt(int signo);
-void mgmtnewfd(int new);
+void mgmtnewfd(SOCKET new);
 
 
 
@@ -825,8 +826,8 @@ void mgmtnewfd(SOCKET new)
 	add_fd(new, mgmt_data, NULL);
 	EVENTOUT(MGMTPORTNEW, new);
 	snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
-	send(new, buf, strlen(buf),0);
-	send(new, prompt, strlen(prompt),0);
+	send(new, buf, (int)strlen(buf),0);
+	send(new, prompt, (int)strlen(prompt),0);
 }
 
 #ifdef DEBUGOPT

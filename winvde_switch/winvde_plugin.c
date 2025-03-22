@@ -1,134 +1,231 @@
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
 
 #include "winvde_plugin.h"
+#include "winvde_comlist.h"
+#include "winvde_output.h"
 
 #if defined(VDEPLUGIN)
-
-
-struct plugin* pluginh = NULL;
-struct plugin** plugint = &pluginh;
-
-int pluginlist(FILE* f, char* arg)
-{
-#define PLUGINFMT "%-22s %s"
-	struct plugin* p;
-	int rv = ENOENT;
-	printoutc(f, PLUGINFMT, "NAME", "HELP");
-	printoutc(f, PLUGINFMT, "------------", "----");
-	for (p = pluginh; p != NULL; p = p->next) {
-		if (strncmp(p->name, arg, strlen(arg)) == 0) {
-			printoutc(f, PLUGINFMT, p->name, p->help);
-			rv = 0;
-		}
-	}
-	return rv;
-}
-
-/* This will be prefixed with getent("$HOME") */
 
 
 #ifndef MAX
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
-/*
- * Try to dlopen a plugin trying different names and locations:
- * (code from view-os by Gardenghi)
- *
- * 1) dlopen(modname)
- * 2) dlopen(modname.so)
- * 3) dlopen(user_umview_plugin_directory/modname)
- * 4) dlopen(user_umview_plugin_directory/modname.so)
- * 5) dlopen(global_umview_plugin_directory/modname)
- * 6) dlopen(global_umview_plugin_directory/modname.so)
- *
- */
 
-#define TRY_DLOPEN(fmt...) \
-{ \
-	snprintf(testpath, tplen, fmt); \
-	if ((handle = dlopen(testpath, flag))) \
-	{ \
-		free(testpath); \
-		return handle; \
-	} \
+#define MODULES_EXT ".dll"
+#define PLUGINS_DIR "plugins"
+
+struct plugin* pluginh = NULL;
+struct plugin** plugint = &pluginh;
+
+//int pluginlist(FILE* f, char* arg)
+int pluginlist(struct comparameter * parameter)
+{
+#define PLUGINFMT "%-22s %s"
+	struct plugin* plugin_struct;
+	int rv = ENOENT;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file &&
+		parameter->data1.file_descriptor != NULL &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL
+		)
+	{
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "NAME", "HELP");
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------", "----");
+		for (plugin_struct = pluginh; plugin_struct != NULL; plugin_struct = plugin_struct->next)
+		{
+			if (strncmp(plugin_struct->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
+			{
+				printoutc(parameter->data1.file_descriptor, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				rv = 0;
+			}
+		}
+		return rv;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 }
 
-void* plugin_dlopen(const char* modname, int flag)
+
+HMODULE plugin_dlopen(const char* modname)
 {
-	void* handle;
-	char* testpath;
-	int tplen;
-	char* homedir = getenv("HOME");
-
+	HMODULE handle = INVALID_HANDLE_VALUE;
+	char* testpath=NULL;
+	size_t tplen = 0;
+	char homedir[MAX_PATH];
+	size_t count = 0;
 	if (!modname)
+	{
 		return NULL;
-
-	if ((handle = dlopen(modname, flag)))
+	}
+	handle = LoadLibraryA(modname);
+	if (handle != NULL)
+	{
 		return handle;
+	}
+
+	count = MAX_PATH;
+	getenv_s(&count,homedir,MAX_PATH,"USERPROFILE");
 
 	/* If there is no home directory, use / */
 	if (!homedir)
-		homedir = "/";
+	{
+		strncpy_s(homedir,MAX_PATH,"\\",strlen("\\"));
+	}
 
 	tplen = strlen(modname) +
 		strlen(MODULES_EXT) + 2 + // + 1 is for a '/' and + 1 for \0
 		MAX(strlen(PLUGINS_DIR),
-			strlen(homedir) + strlen(USER_PLUGINS_DIR));
+		strlen(homedir) + strlen(USER_PLUGINS_DIR) + 1);
 
-	testpath = malloc(tplen);
-
-	TRY_DLOPEN("%s%s", modname, MODULES_EXT);
-	TRY_DLOPEN("%s%s/%s", homedir, USER_PLUGINS_DIR, modname);
-	TRY_DLOPEN("%s%s/%s%s", homedir, USER_PLUGINS_DIR, modname, MODULES_EXT);
-	TRY_DLOPEN("%s%s", PLUGINS_DIR, modname);
-	TRY_DLOPEN("%s/%s%s", PLUGINS_DIR, modname, MODULES_EXT);
-
-	free(testpath);
+	testpath = (char*)malloc(tplen);
+	if (testpath)
+	{
+		TRY_DLOPEN("%s%s", modname, MODULES_EXT);
+		TRY_DLOPEN("%s%s\\%s", homedir, USER_PLUGINS_DIR, modname);
+		TRY_DLOPEN("%s%s\\%s%s", homedir, USER_PLUGINS_DIR, modname, MODULES_EXT);
+		TRY_DLOPEN("%s%s", PLUGINS_DIR, modname);
+		TRY_DLOPEN("%s\\%s%s", PLUGINS_DIR, modname, MODULES_EXT);
+		if (testpath)
+		{
+			free(testpath);
+		}
+	}
 	return NULL;
 }
 
 
 
-int pluginadd(char* arg) {
-	void* handle;
-	struct plugin* p;
+//int pluginadd(char* arg) {
+int pluginadd(struct comparameter * parameter)
+{
+	HMODULE handle = INVALID_HANDLE_VALUE;
+	struct plugin* plugin_struct = NULL;
 	int rv = ENOENT;
-	if ((handle = plugin_dlopen(arg, RTLD_LAZY)) != NULL) {
-		if ((p = (struct plugin*)dlsym(handle, "vde_plugin_data")) != NULL) {
-			if (p->handle != NULL) { /* this dyn library is already loaded*/
-				dlclose(handle);
-				rv = EEXIST;
-			}
-			else {
-				addplugin(p);
-				p->handle = handle;
-				rv = 0;
-			}
-		}
-		else {
-			rv = EINVAL;
-		}
+	if(!parameter)
+	{
+		errno = EINVAL;
+		return -1;
 	}
-	return rv;
+	if (parameter->type1 == com_type_null && 
+		parameter->paramType == com_param_type_string && 
+		parameter->paramValue.stringValue != NULL
+	)
+	{
+		if ((handle = plugin_dlopen(parameter->paramValue.stringValue)) != NULL)
+		{
+			plugin_struct = (struct plugin*)GetProcAddress(handle, "vde_plugin_data");
+			if (plugin_struct != NULL)
+			{
+				if (plugin_struct->handle != NULL)
+				{ /* this dyn library is already loaded*/
+					FreeLibrary(handle);
+					rv = EEXIST;
+				}
+				else
+				{
+					addplugin(plugin_struct);
+					plugin_struct->handle = handle;
+					rv = 0;
+				}
+			}
+			else
+			{
+				rv = EINVAL;
+			}
+		}
+		return rv;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 }
 
-int plugindel(char* arg) {
+//int plugindel(char* arg) {
+int plugindel(struct comparameter * parameter) {
 	struct plugin** p = &pluginh;
-	while (*p != NULL) {
-		void* handle;
-		if (strncmp((*p)->name, arg, strlen(arg)) == 0
-			&& ((*p)->handle != NULL)) {
-			struct plugin* this = *p;
-			delplugin(this);
-			handle = this->handle;
-			this->handle = NULL;
-			dlclose(handle);
-			return 0;
+	HMODULE handle;
+	struct plugin* _this = NULL;
+	if (!parameter || !p)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL
+		)
+	{
+		while (*p != NULL)
+		{
+			if (
+				strncmp((*p)->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0
+				&& ((*p)->handle != NULL))
+			{
+				_this = *p;
+				delplugin(_this);
+				handle = _this->handle;
+				_this->handle = NULL;
+				FreeLibrary(handle);
+				return 0;
+			}
+			else
+			{
+				p = &(*p)->next;
+			}
+		}
+		return ENOENT;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+void addplugin(struct plugin* cl)
+{
+	if (!cl)
+	{
+		return;
+	}
+	cl->next = NULL;
+	(*plugint) = cl;
+	plugint = (&cl->next);
+}
+
+void delplugin(struct plugin* cl)
+{
+	struct plugin** p = plugint = &pluginh;
+	if(!cl||!p)
+	{
+		return;
+	}
+	while (*p != NULL)
+	{
+		if (*p == cl)
+		{
+			*p = cl->next;
 		}
 		else
+		{
 			p = &(*p)->next;
+			plugint = p;
+		}
 	}
-	return ENOENT;
 }
+
 #endif
