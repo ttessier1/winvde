@@ -1,6 +1,7 @@
 #pragma once
 
 #include <winsock2.h>
+#include <stdarg.h>
 
 #define D_PACKET 01000
 #define D_MGMT 02000

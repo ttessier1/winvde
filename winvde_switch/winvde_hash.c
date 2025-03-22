@@ -338,7 +338,7 @@ struct hash_entry* find_entry(uint64_t MAC)
 
 void delete_hash_entry(struct hash_entry* OLD)
 {
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 	DBGOUT(DBGHASHDEL, "%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", EMAC2MAC6(OLD->dst), EMAC2VLAN2(OLD->dst), OLD->port);
 	EVENTOUT(DBGHASHDEL, OLD->dst);
 #endif

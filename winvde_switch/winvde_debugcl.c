@@ -9,9 +9,9 @@
 
 #if defined(DEBUGOPT)
 
-static struct dbgcl* dbgclh = NULL;
+struct dbgcl* dbgclh = NULL;
 
-static struct dbgcl** dbgclt = &dbgclh;
+struct dbgcl** dbgclt = &dbgclh;
 
 void adddbgcl(size_t ncl, struct dbgcl* cl)
 {

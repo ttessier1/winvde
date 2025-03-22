@@ -10,18 +10,19 @@
 #include "winvde_ev.h"
 #include "winvde_printfunc.h"
 
-#define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
-#define DEBUGFORMAT2 "%-22s %03o %-6s %s"
+
 
 #if defined(DEBUGOPT)
 
-static char _dbgnl = '\n';
+//static char _dbgnl = '\n';
 
 //int debuglist(FILE* f, int fd, char* path)
-int debuglist(struct comparameter * parameter)
+static int debuglist(struct comparameter * parameter)
 {
-	FILE* file_stream = NULL;
+/*#define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
+#define DEBUGFORMAT2 "%-22s %03o %-6s %s"
 	SOCKET socket_stream = INVALID_SOCKET;
+	char* buffer = NULL;
 	struct dbgcl* p;
 	int i;
 	int rv = ENOENT;
@@ -30,30 +31,38 @@ int debuglist(struct comparameter * parameter)
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL && parameter->paramType == com_param_type_string && parameter->paramValue != NULL)
+	if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET && parameter->paramType == com_param_type_string && parameter->paramValue != NULL)
 	{
-		file_stream = parameter->data1.file_descriptor;
-		printoutc(file_stream, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
-		printoutc(file_stream, DEBUGFORMAT1, "------------", "---", "------", "----");
+		socket_stream = parameter->data1.socket;
+		
+		asprintf(&buffer, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
+		send(socket_stream, buffer, strlen(buffer), 0);
+		free(buffer);
+		asprintf(&buffer, DEBUGFORMAT1, "------------", "---", "------", "----");
+		send(socket_stream, buffer, strlen(buffer), 0);
+		free(buffer);
 		for (p = dbgclh; p != NULL; p = p->next)
 		{
 			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
 			{
-				for (i = 0; i < p->nfds && p->fds[i] != file_stream; i++)
+				for (i = 0; i < p->nfds && p->fds[i] != socket_stream; i++)
 				{
 					;
 				}
 				rv = 0;
-				printoutc(file_stream, DEBUGFORMAT2, p->path, p->tag & 0777, i < p->nfds ? "ON" : "OFF", p->help);
+				asprintf(&buffer, DEBUGFORMAT2, p->path, p->tag & 0777, i < p->nfds ? "ON" : "OFF", p->help);
+				send(socket_stream, buffer, strlen(buffer), 0);
+				free(buffer);
 			}
 		}
 	}
-	return rv;
+	return rv;*/
+	return -1;
 }
 
-int debugadd(struct comparameter* parameter)
+static int debugadd(struct comparameter* parameter)
 {
-	struct dbgcl* p=NULL;
+	/*struct dbgcl* p = NULL;
 	int rv = EINVAL;
 	int index;
 	if (!parameter)
@@ -62,8 +71,8 @@ int debugadd(struct comparameter* parameter)
 		return -1;
 	}
 	if (
-		parameter->type1 == com_type_file && 
-		parameter->data1.file_descriptor != NULL && 
+		parameter->type1 == com_type_socket && 
+		parameter->data1.socket!= INVALID_SOCKET&& 
 		parameter->paramType == com_param_type_string && 
 		parameter->paramValue.stringValue != NULL
 	)
@@ -111,15 +120,15 @@ int debugadd(struct comparameter* parameter)
 			}
 		}
 	}
-	return rv;
+	return rv;*/
+	return -1;
 }
 
 /* EINVAL -> no matches
  * ENOENT -> all the matches do not include fd
  * 0 otherwise */
-int debugdel(struct comparameter* parameter) {
-//int debugdel(int fd, char* path) {
-	struct dbgcl* p;
+static int debugdel(struct comparameter* parameter) {
+	/*struct dbgcl* p;
 	int rv = EINVAL;
 	if (!parameter)
 	{
@@ -127,7 +136,8 @@ int debugdel(struct comparameter* parameter) {
 		return -1;
 	}
 	if (
-		parameter->type1 == com_type_file && 
+		parameter->type1 == com_type_socket && 
+		parameter->data1.socket != INVALID_SOCKET &&
 		parameter->paramType == com_param_type_string &&
 		parameter->paramValue.stringValue != NULL	
 	)
@@ -141,19 +151,20 @@ int debugdel(struct comparameter* parameter) {
 					;
 				}
 				if (i < p->nfds) {
-					p->nfds--; /* the last one */
-					p->fds[i] = p->fds[p->nfds]; /* swap it with the deleted element*/
+					p->nfds--;
+					p->fds[i] = p->fds[p->nfds];
 					rv = 0;
 				}
 			}
 		}
 	}
-	return rv;
+	return rv; */
+	return -1;
 }
 
-void debugout(struct dbgcl* cl, const char* format, ...)
+static void debugout(struct dbgcl* cl, const char* format, ...)
 {
-	va_list arg;
+	/*va_list arg;
 	char* msg;
 	int i;
 	char* header;
@@ -167,19 +178,21 @@ void debugout(struct dbgcl* cl, const char* format, ...)
 	va_end(arg);
 
 	for (i = 0; i < cl->nfds; i++)
+	{
 		writev(cl->fds[i], iov, 3);
+	}
 	free(header);
-	free(msg);
+	free(msg);*/
 }
 
 int packetfilter(struct dbgcl* cl, ...)
 {
-	int i;
+	/*int i;
 	va_list arg;
 	int len;
 	va_start(arg, cl);
-	(void)va_arg(arg, int); /*port*/
-	(void)va_arg(arg, char*); /*buf*/
+	(void)va_arg(arg, int);
+	(void)va_arg(arg, char*);
 	len = va_arg(arg, int);
 	va_end(arg);
 	for (i = 0; i < cl->nfun && len>0; i++) {
@@ -192,10 +205,8 @@ int packetfilter(struct dbgcl* cl, ...)
 	if (len < 0)
 		return 0;
 	else
-		return len;
+		return len;*/
+	return 0;
 }
-
-
-
 
 #endif

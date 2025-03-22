@@ -32,7 +32,7 @@
 #define D_EP 030
 #define D_FSTP 040
 
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 #define DBGPORTNEW (dl) 
 #define DBGPORTDEL (dl+1) 
 #define DBGPORTDESCR (dl+2) 
@@ -1111,7 +1111,7 @@ int alloc_port(unsigned int portno)
 			}
 			else
 			{
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 				DBGOUT(DBGPORTNEW, "%02d", index);
 				EVENTOUT(DBGPORTNEW, index);
 #endif
@@ -1189,7 +1189,7 @@ int close_ep_port_fd(uint32_t portno, int fd_ctl)
 		if (port != NULL) {
 			rv = rec_close_ep(&(port->ep), fd_ctl);
 			if (port->ep == NULL) {
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 				DBGOUT(DBGPORTDEL, "%02d", portno);
 				EVENTOUT(DBGPORTDEL, portno);
 #endif
@@ -1324,7 +1324,7 @@ int rec_close_ep(struct endpoint** pep, int fd_ctl)
 	struct endpoint* this = *pep;
 	if (this != NULL) {
 		if (this->fd_ctl == fd_ctl) {
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 			DBGOUT(DBGEPDEL, "Port %02d FD %2d", this->port, fd_ctl);
 			EVENTOUT(DBGEPDEL, this->port, fd_ctl);
 #endif

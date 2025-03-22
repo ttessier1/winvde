@@ -68,6 +68,7 @@ int mgmt_showinfo(struct comparameter* parameter);
 int runscript(struct comparameter* parameter);
 void save_pidfile();
 void sighupmgmt(int signo);
+void mgmtnewfd(int new);
 
 
 
@@ -807,6 +808,25 @@ void save_pidfile()
 		exit(1);
 	}
 	fclose(fileHandle);
+}
+
+void mgmtnewfd(SOCKET new)
+{
+	char buf[MAXCMD];
+	DWORD one = 1;
+	if (ioctlsocket(new, FIONBIO, &one)==SOCKET_ERROR)
+	{
+		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		printlog(LOG_WARNING, "mgmt fcntl - setting O_NONBLOCK: %s - %d\n", errorbuff, WSAGetLastError());
+		closesocket(new);
+		return;
+	}
+
+	add_fd(new, mgmt_data, NULL);
+	EVENTOUT(MGMTPORTNEW, new);
+	snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
+	send(new, buf, strlen(buf),0);
+	send(new, prompt, strlen(prompt),0);
 }
 
 #ifdef DEBUGOPT

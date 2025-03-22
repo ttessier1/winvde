@@ -52,7 +52,9 @@ int eventdel(int (*fun)(), char* path, void* arg) {
 			int i;
 			if (rv == EINVAL) rv = ENOENT;
 			for (i = 0; i < p->nfun && (p->fun[i] != fun) && (p->funarg[i] != arg); i++)
+			{
 				;
+			}
 			if (i < p->nfun) {
 				p->nfun--; /* the last one */
 				p->fun[i] = p->fun[p->nfun]; /* swap it with the deleted element*/
