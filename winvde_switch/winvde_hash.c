@@ -15,6 +15,7 @@
 #include "winvde_loglevel.h"
 #include "winvde_debugcl.h"
 #include "winvde_debugopt.h"
+#include "winvde_event.h"
 
 #ifdef DEBUGOPT
 #define DBGHASHNEW (dl) 
@@ -56,12 +57,12 @@ struct hash_entry** hash_head;
 
 
 int po2round(int vx);
-int showinfo(FILE* fd);
-int print_hash(FILE* fd);
+int showinfo(struct comparameter* parameter);
+int print_hash(struct comparameter* parameter);
 void print_hash_entry(struct hash_entry* hash_entry_value, void* arg);
-int find_hash(FILE* fd, char* strmac);
-int hash_resize(int hash_size);
-int hash_set_minper(int expire);
+int find_hash(struct comparameter* parameter);
+int hash_resize(struct comparameter* parameter);
+int hash_set_minper(struct comparameter* parameter);
 int calc_hash(uint64_t src);
 struct hash_entry* find_entry(uint64_t MAC);
 void flush_iterator(struct hash_entry* hash_entry_value, void* arg);
@@ -131,20 +132,49 @@ void for_all_hash(void (*f)(struct hash_entry*, void*), void* arg)
 	}
 }
 
-int showinfo(FILE* fd)
+
+//int showinfo(FILE* fd)
+int showinfo(struct comparameter* parameter)
 {
-	printoutc(fd, "Hash size %d", HASH_SIZE);
-	printoutc(fd, "GC interval %d secs", gc_interval);
-	printoutc(fd, "GC expire %d secs", gc_expire);
-	printoutc(fd, "Min persistence %d secs", min_persistence);
-	return 0;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL)
+	{
+		printoutc(parameter->data1.file_descriptor, "Hash size %d", HASH_SIZE);
+		printoutc(parameter->data1.file_descriptor, "GC interval %d secs", gc_interval);
+		printoutc(parameter->data1.file_descriptor, "GC expire %d secs", gc_expire);
+		printoutc(parameter->data1.file_descriptor, "Min persistence %d secs", min_persistence);
+		return 0;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 }
 
-int print_hash(FILE* fd)
+//int print_hash(FILE* fd)
+int print_hash(struct comparameter* parameter)
 {
-	qtime_csenter();
-	for_all_hash(print_hash_entry, fd);
-	qtime_csexit();
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL && parameter->paramType==com_param_type_null)
+	{
+		qtime_csenter();
+		for_all_hash(print_hash_entry, parameter->data1.file_descriptor);
+		qtime_csexit();
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 	return 0;
 }
 
@@ -161,7 +191,8 @@ void print_hash_entry(struct hash_entry* hash_entry_value, void* arg)
 		qtime() - hash_entry_value->last_seen);
 }
 
-int find_hash(FILE* fd, char* strmac)
+//int find_hash(FILE* fd, char* strmac)
+int find_hash(struct comparameter* parameter)
 {
 	int index = 0;
 	int maci[ETH_ALEN];
@@ -169,53 +200,109 @@ int find_hash(FILE* fd, char* strmac)
 	unsigned char* mac = macv;
 	int rv = -1;
 	int vlan = 0;
-	struct hash_entry* hash_entry_value;
-	if (strchr(strmac, ':') != NULL)
-		rv = sscanf_s(strmac, "%x:%x:%x:%x:%x:%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
-	else
-		rv = sscanf_s(strmac, "%x.%x.%x.%x.%x.%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
-	if (rv < 6)
-		return EINVAL;
-	else {
-		
-		for (index = 0; index < ETH_ALEN; index++)
+	struct hash_entry* hash_entry_value = NULL;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && 
+		parameter->data1.file_descriptor != NULL &&
+		parameter->paramType== com_param_type_string && 
+		parameter->paramValue.stringValue != NULL)
+	{
+		if (strchr(parameter->paramValue.stringValue, ':') != NULL)
 		{
-			mac[index] = maci[index];
+			rv = sscanf_s(parameter->paramValue.stringValue, "%x:%x:%x:%x:%x:%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
 		}
-		hash_entry_value = find_entry(extmac(mac, vlan));
-		if (hash_entry_value == NULL)
-			return ENODEV;
-		else {
-			printoutc(fd, "Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
-				"age %ld secs", 
-				calc_hash(hash_entry_value->dst),
-				EMAC2MAC6(hash_entry_value->dst), 
-				EMAC2VLAN(hash_entry_value->dst), 
-				hash_entry_value->port + 1, 
-				qtime() - hash_entry_value->last_seen);
+		else
+		{
+			rv = sscanf_s(parameter->paramValue.stringValue, "%x.%x.%x.%x.%x.%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
+		}
+		if (rv < 6)
+		{
+			return EINVAL;
+		}
+		else
+		{
+			for (index = 0; index < ETH_ALEN; index++)
+			{
+				mac[index] = maci[index];
+			}
+			hash_entry_value = find_entry(extmac(mac, vlan));
+			if (hash_entry_value == NULL)
+			{
+				return ENODEV;
+			}
+			else
+			{
+				printoutc(parameter->data1.file_descriptor, "Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
+					"age %ld secs",
+					calc_hash(hash_entry_value->dst),
+					EMAC2MAC6(hash_entry_value->dst),
+					EMAC2VLAN(hash_entry_value->dst),
+					hash_entry_value->port + 1,
+					qtime() - hash_entry_value->last_seen);
+				return 0;
+			}
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+//int hash_resize(int hash_size)
+int hash_resize(struct comparameter * parameter)
+{
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		if (parameter->paramValue.intValue > 0)
+		{
+			hash_flush();
+			qtime_csenter();
+			free(hash_head);
+			HASH_INIT(po2round(parameter->paramValue.intValue));
+			qtime_csexit();
 			return 0;
 		}
-	}
-}
-
-int hash_resize(int hash_size)
-{
-	if (hash_size > 0) {
-		hash_flush();
-		qtime_csenter();
-		free(hash_head);
-		HASH_INIT(po2round(hash_size));
-		qtime_csexit();
-		return 0;
+		else
+		{
+			return EINVAL;
+		}
 	}
 	else
-		return EINVAL;
+	{
+		errno = EINVAL;
+		return -1;
+	}
 }
 
 
-int hash_set_minper(int expire)
+//int hash_set_minper(int expire)
+int hash_set_minper(struct comparameter* parameter)
 {
-	min_persistence = expire;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		min_persistence = parameter->paramValue.intValue;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 	return 0;
 }
 

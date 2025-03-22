@@ -13,8 +13,19 @@ int debugadd(struct comparameter* parameter);
 //
 int debugdel(struct comparameter* parameter);
 void debugout(struct dbgcl* cl, const char* format, ...);
-int eventadd(int (*fun)(), char* path, void* arg);
-int eventdel(int (*fun)(), char* path, void* arg);
-void eventout(struct dbgcl* cl, ...);
+
+int packetfilter(struct dbgcl* cl, ...);
+
+#define DBGOUT(CL, FORMAT, ...) \
+	if (((CL)->nfds) > 0) debugout((CL), (FORMAT), __VA_ARGS__)
+
+#define PACKETFILTER(CL, PORT, BUF, LEN) \
+	(((CL)->nfun) == 0 || ((LEN)=packetfilter((CL), (PORT), (BUF), (LEN))))
+
+#else
+
+#define DBGOUT(CL, ...)
+
+#define PACKETFILTER(CL, PORT, BUF, LEN)  (LEN)
 
 #endif

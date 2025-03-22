@@ -144,6 +144,7 @@
     <ClCompile Include="winvde_debugcl.h" />
     <ClCompile Include="winvde_descriptor.c" />
     <ClCompile Include="winvde_ev.c" />
+    <ClCompile Include="winvde_event.c" />
     <ClCompile Include="winvde_gc.c" />
     <ClCompile Include="winvde_getopt.c" />
     <ClCompile Include="winvde_hash.c" />
@@ -169,6 +170,7 @@
     <ClInclude Include="winvde_debugopt.h" />
     <ClInclude Include="winvde_descriptor.h" />
     <ClInclude Include="winvde_ev.h" />
+    <ClInclude Include="winvde_event.h" />
     <ClInclude Include="winvde_getopt.h" />
     <ClInclude Include="winvde_gc.h" />
     <ClInclude Include="version.h" />

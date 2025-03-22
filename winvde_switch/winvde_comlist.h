@@ -1,6 +1,7 @@
 #pragma once
 
 #include <WinSock2.h>
+#include <stdio.h>
 
 #define NOARG 0
 #define INTARG 1
@@ -77,9 +78,10 @@ typedef struct comlist {
 }COMLIST,*LPCOMLIST;
 #include <poppack.h>
 
+extern struct comlist* clh;
+extern struct comlist** clt;
+
 void addcl(int ncl, struct comlist* cl);
 #define ADDCL(CL) addcl(sizeof(CL)/sizeof(struct comlist),(CL))
 void delcl(int ncl, struct comlist* cl);
 
-extern struct comlist* clh ;
-extern struct comlist** clt;

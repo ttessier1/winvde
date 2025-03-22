@@ -28,6 +28,7 @@
 #include "winvde_type.h"
 #include "winvde_debugcl.h"
 #include "winvde_debugopt.h"
+#include "winvde_event.h"
 #include "winvde_memorystream.h"
 
 #if defined(DEBUGOPT)
@@ -69,6 +70,9 @@ void save_pidfile();
 void sighupmgmt(int signo);
 
 
+
+
+
 static struct comlist cl[] = {
 	{"help","[arg]","Help (limited to arg when specified)",help,STRARG | WITHFILE},
 	{"logout","","logout from this mgmt terminal",vde_logout,NOARG},
@@ -90,7 +94,7 @@ static struct comlist cl[] = {
 };
 
 // globals
-struct option long_options[] = {
+static struct option long_options[] = {
 	{"daemon", 0, 0, 'd'},
 	{"pidfile", 1, 0, 'p'},
 	{"rcfile", 1, 0, 'f'},

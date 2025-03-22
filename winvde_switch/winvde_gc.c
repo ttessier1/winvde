@@ -1,8 +1,10 @@
 #include <time.h>
-
+#include <errno.h>
 
 #include "winvde_gc.h"
 #include "winvde_hash.h"
+#include "winvde_comlist.h"
+
 
 int gc_interval = 0;
 int gc_expire = 0;
@@ -26,17 +28,45 @@ void hash_gc(void* arg)
 	for_all_hash(&gc, &t);
 }
 
-int hash_set_gc_interval(int interval)
+//int hash_set_gc_interval(int interval)
+int hash_set_gc_interval(struct comparameter * parameter)
 {
-	qtimer_del(gc_timer_no);
-	gc_interval = interval;
-	gc_timer_no = qtimer_add(gc_interval, 0, hash_gc, NULL);
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		qtimer_del(gc_timer_no);
+		gc_interval = parameter->paramValue.intValue;
+		gc_timer_no = qtimer_add(gc_interval, 0, hash_gc, NULL);
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 	return 0;
 }
 
-int hash_set_gc_expire(int expire)
+//int hash_set_gc_expire(int expire)
+int hash_set_gc_expire(struct comparameter* parameter)
 {
-	gc_expire = expire;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		gc_expire = parameter->paramValue.intValue;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 	return 0;
 }
 

@@ -68,7 +68,7 @@ size_t writev(int fd, const struct iovec* iov, int iovcnt)
 		totalBytesWritten += bytesWritten;
 		if (iov[index].iov_len > 0)
 		{
-			bytesWritten = _write(fd, iov[index].iov_base, iov[index].iov_len);
+			bytesWritten = _write(fd, iov[index].iov_base, (uint32_t)iov[index].iov_len);
 			if (bytesWritten != iov[index].iov_len)
 			{
 				errno = EFAULT;

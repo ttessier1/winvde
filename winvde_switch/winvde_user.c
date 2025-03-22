@@ -32,7 +32,7 @@ uint32_t GetUserIdFunction()
     DWORD numberOfEntries = 0;
     DWORD totalNumberOfEntries = 0;
     DWORD resumeHandle = 0;
-    DWORD index = 0;
+    DWORD index = -1;
     USER_INFO_0* lpUserInfo = NULL;
     wchar_t*  username = GetUserNameFunction();
     if (username != NULL)
@@ -112,7 +112,7 @@ struct group * GetGroupFunction(const char * groupName)
                 if (theGroup)
                 {
                     theGroup->groupid = index;
-                    theGroup->groupname = groupName;
+                    theGroup->groupname = (char*)groupName;
                 }
                 break;
             }
@@ -128,5 +128,5 @@ struct group * GetGroupFunction(const char * groupName)
         free(wideGroupName);
         wideGroupName = NULL;
     }
-    return index;
+    return theGroup;
 }

@@ -14,6 +14,9 @@
 #include "winvde_loglevel.h"
 #include "winvde_debugcl.h"
 #include "winvde_debugopt.h"
+#include "winvde_event.h"
+#include "winvde_user.h"
+
 
 #define D_PACKET 01000
 #define D_MGMT 02000
@@ -52,7 +55,7 @@ struct dbgcl dl[] = {
 #define NOTINPOOL 0x8000
 
 int pflag = 0;
-int numports;
+uint32_t numports;
 #ifdef VDE_PQ2
 int stdqlen = 128;
 #endif
@@ -184,7 +187,7 @@ void port_init(int init_num_ports)
 		exit(1);
 	}
 	ADDCL(cl);
-#ifdef DEBUGOPT
+#if defined(DEBUGOPT)
 	ADDDBGCL(dl);
 #endif
 	if (vlancreate_nocheck(0) != 0) {
@@ -193,410 +196,853 @@ void port_init(int init_num_ports)
 	}
 }
 
-int port_showinfo(FILE* fd)
+int port_showinfo(struct comparameter * parameter)
 {
-	printoutc(fd, "Numports=%d", numports);
-	printoutc(fd, "HUB=%s", (pflag & HUB_TAG) ? "true" : "false");
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if(parameter->type1 != com_type_file|| parameter->data1.file_descriptor==NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL)
+	{
+		printoutc(parameter->data1.file_descriptor, "Numports=%d", numports);
+		printoutc(parameter->data1.file_descriptor, "HUB=%s", (pflag & HUB_TAG) ? "true" : "false");
 #ifdef PORTCOUNTERS
-	printoutc(fd, "counters=true");
+		printoutc(parameter->data1.file_descriptor, "counters=true");
 #else
-	printoutc(fd, "counters=false");
+		printoutc(parameter->data1.file_descriptor, "counters=false");
 #endif
 #ifdef VDE_PQ2
-	printoutc(fd, "default length of port packet queues: %d", stdqlen);
-#endif
-	return 0;
-}
-
-int portsetnumports(int val)
-{
-	if (val > 0) {
-		/*resize structs*/
-		int index;
-		for (index = val; index < numports; index++)
-			if (portv[index] != NULL)
-				return EADDRINUSE;
-		portv = realloc(portv, val * sizeof(struct port*));
-		if (portv == NULL) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
-			printlog(LOG_ERR, "Numport resize failed portv %s", errorbuff);
-			exit(1);
-		}
-		for (index = 0; index < NUMOFVLAN; index++) {
-			if (vlant[index].table) {
-				vlant[index].table = ba_realloc(vlant[index].table, numports, val);
-				if (vlant[index].table == NULL) {
-					strerror_s(errorbuff, sizeof(errorbuff), errno);
-					printlog(LOG_ERR, "Numport resize failed vlan tables vlan table %s", errorbuff);
-					exit(1);
-				}
-			}
-			if (vlant[index].bctag) {
-				vlant[index].bctag = ba_realloc(vlant[index].bctag, numports, val);
-				if (vlant[index].bctag == NULL) {
-					strerror_s(errorbuff, sizeof(errorbuff), errno);
-					printlog(LOG_ERR, "Numport resize failed vlan tables vlan bctag %s", errorbuff);
-					exit(1);
-				}
-			}
-			if (vlant[index].bcuntag) {
-				vlant[index].bcuntag = ba_realloc(vlant[index].bcuntag, numports, val);
-				if (vlant[index].bcuntag == NULL) {
-					strerror_s(errorbuff, sizeof(errorbuff), errno);
-					printlog(LOG_ERR, "Numport resize failed vlan tables vlan bctag %s", errorbuff);
-					exit(1);
-				}
-			}
-			if (vlant[index].notlearning) {
-				vlant[index].notlearning = ba_realloc(vlant[index].notlearning, numports, val);
-				if (vlant[index].notlearning == NULL) {
-					strerror_s(errorbuff, sizeof(errorbuff), errno);
-					printlog(LOG_ERR, "Numport resize failed vlan tables vlan notlearning %s", errorbuff);
-					exit(1);
-				}
-			}
-		}
-		for (index = numports; index < val; index++)
-			portv[index] = NULL;
-#ifdef FSTP
-		fstsetnumports(val);
-#endif
-		numports = val;
-		return 0;
-	}
-	else
-		return EINVAL;
-}
-
-int portsethub(int val)
-{
-	if (val) {
-#ifdef FSTP
-		fstpshutdown();
-#endif
-		portflag(P_SETFLAG, HUB_TAG);
-	}
-	else
-		portflag(P_CLRFLAG, HUB_TAG);
-	return 0;
-}
-
-int portsetvlan(char* arg)
-{
-	int port, vlan;
-	if (sscanf_s(arg, "%i %i", &port, &vlan) != 2)
-		return EINVAL;
-	/* port NOVLAN is okay here, it means NO untagged traffic */
-	if (vlan <0 || vlan > NUMOFVLAN || port < 0 || port >= numports)
-		return EINVAL;
-	if ((vlan != NOVLAN && !bac_check(validvlan, vlan)) || portv[port] == NULL)
-		return ENXIO;
-	int oldvlan = portv[port]->vlanuntag;
-	portv[port]->vlanuntag = NOVLAN;
-	hash_delete_port(port);
-	if (portv[port]->ep != NULL) {
-		/*changing active port*/
-		if (oldvlan != NOVLAN)
-			ba_clr(vlant[oldvlan].bcuntag, port);
-		if (vlan != NOVLAN) {
-			ba_set(vlant[vlan].bcuntag, port);
-			ba_clr(vlant[vlan].bctag, port);
-		}
-#ifdef FSTP
-		if (oldvlan != NOVLAN) fstdelport(oldvlan, port);
-		if (vlan != NOVLAN) fstaddport(vlan, port, 0);
+		printoutc(parameter->data1.file_descriptor, "default length of port packet queues: %d", stdqlen);
 #endif
 	}
-	if (oldvlan != NOVLAN) ba_clr(vlant[oldvlan].table, port);
-	if (vlan != NOVLAN) ba_set(vlant[vlan].table, port);
-	portv[port]->vlanuntag = vlan;
 	return 0;
 }
 
-int portcreateauto(FILE* fd)
+int portsetnumports(struct comparameter* parameter)
 {
-	int port = alloc_port(0);
-
-	if (port < 0)
-		return ENOSPC;
-
-	portv[port]->flag |= NOTINPOOL;
-	printoutc(fd, "Port %04d", port);
-	return 0;
-}
-
-int portcreate(int val)
-{
-	int port;
-	if (val < 0 || val >= numports)
-		return EINVAL;
-	if (portv[val] != NULL)
-		return EEXIST;
-	port = alloc_port(val);
-	if (port < 0)
-		return ENOSPC;
-	portv[port]->flag |= NOTINPOOL;
-	return 0;
-}
-
-int portremove(int val)
-{
-	if (val < 0 || val >= numports)
-		return EINVAL;
-	if (portv[val] == NULL)
-		return ENXIO;
-	if (portv[val]->ep != NULL)
-		return EADDRINUSE;
-	free_port(val);
-	return 0;
-}
-
-int portallocatable(char* arg)
-{
-	int port, value;
-	if (sscanf_s(arg, "%i %i", &port, &value) != 2)
-		return EINVAL;
-	if (port < 0 || port >= numports)
-		return EINVAL;
-	if (portv[port] == NULL)
-		return ENXIO;
-	if (value)
-		portv[port]->flag &= ~NOTINPOOL;
-	else
-		portv[port]->flag |= NOTINPOOL;
-	return 0;
-}
-
-int portsetuser(char* arg)
-{
-	int port;
-	char* portuid = arg;
-	while (*portuid != 0 && *portuid == ' ') portuid++;
-	while (*portuid != 0 && *portuid != ' ') portuid++;
-	while (*portuid != 0 && *portuid == ' ') portuid++;
-	if (sscanf_s(arg, "%i", &port) != 1 || *portuid == 0)
-		return EINVAL;
-	if (port < 0 || port >= numports)
-		return EINVAL;
-	if (portv[port] == NULL)
-		return ENXIO;
-	//if ((pw = getpwnam(portuid)) != NULL)
-	//	portv[port]->user = pw->pw_uid;
-	//if (isdigit(*portuid))
-	//	portv[port]->user = atoi(portuid);
-	//else if (strcmp(portuid, "NONE") == 0 || strcmp(portuid, "ANY") == 0)
-		portv[port]->user = -1;
-	//else
-	//	return EINVAL;
-	return 0;
-}
-
-int portsetgroup(char* arg)
-{
-	int port;
-	char* portgid = arg;
-	while (*portgid != 0 && *portgid == ' ') portgid++;
-	while (*portgid != 0 && *portgid != ' ') portgid++;
-	while (*portgid != 0 && *portgid == ' ') portgid++;
-	if (sscanf_s(arg, "%i", &port) != 1 || *portgid == 0)
-		return EINVAL;
-	if (port < 0 || port >= numports)
-		return EINVAL;
-	if (portv[port] == NULL)
-		return ENXIO;
-	//if ((gr = getgrnam(portgid)) != NULL)
-	//	portv[port]->group = gr->gr_gid;
-	//else if (isdigit(*portgid))
-	//	portv[port]->group = atoi(portgid);
-	//else if (strcmp(portgid, "NONE") == 0 || strcmp(portgid, "ANY") == 0)
-		portv[port]->group = -1;
-	//else
-	//	return EINVAL;
-	return 0;
-}
-
-int epclose(char* arg)
-{
-	int port, id;
-	if (sscanf_s(arg, "%i %i", &port, &id) != 2)
+	uint32_t index = 0;
+	if (!parameter)
 	{
-		return EINVAL;
+		errno = EINVAL;
+		return -1;
 	}
-	else
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
 	{
-		return close_ep_port_fd(port, id);
-	}
-}
-
-int print_ptable(FILE* fd, char* arg)
-{
-	int index;
-	if (*arg != 0) {
-		index = atoi(arg);
-		if (index < 0 || index >= numports)
-			return EINVAL;
-		else {
-			return print_port(fd, index, 0);
-		}
-	}
-	else {
-		for (index = 0; index < numports; index++)
-			print_port(fd, index, 0);
-		return 0;
-	}
-}
-
-int print_ptableall(FILE* fd, char* arg)
-{
-	int index;
-	if (*arg != 0) {
-		index = atoi(arg);
-		if (index < 0 || index >= numports)
-			return EINVAL;
-		else {
-			return print_port(fd, index, 1);
-		}
-	}
-	else {
-		for (index = 0; index < numports; index++)
-			print_port(fd, index, 1);
-		return 0;
-	}
-}
-
-int vlancreate(int vlan)
-{
-	if (vlan > 0 && vlan < NUMOFVLAN - 1) { /*vlan NOVLAN (0xfff a.k.a. 4095) is reserved */
-		if (bac_check(validvlan, vlan))
-			return EEXIST;
-		else
-			return vlancreate_nocheck(vlan);
-	}
-	else
-		return EINVAL;
-}
-
-int vlanremove(int vlan)
-{
-	int index = 0;
-	int is_used = 0;
-	if (vlan >= 0 && vlan < NUMOFVLAN)
-	{
-		if (bac_check(validvlan, vlan))
-		{
+		if (parameter->paramValue.intValue > 0) {
+			/*resize structs*/
 			
-			ba_FORALL(1,vlant[vlan].table, numports, is_used++, index);
-			if (is_used)
+			for (index = parameter->paramValue.intValue; index < numports; index++)
 			{
-				return EADDRINUSE;
+				if (portv[index] != NULL)
+				{
+					return EADDRINUSE;
+				}
 			}
-			else
+			portv = (struct port**)realloc(portv, parameter->paramValue.intValue * sizeof(struct port*));
+			if (portv == NULL)
 			{
-				bac_clr(validvlan, NUMOFVLAN, vlan);
-				free(vlant[vlan].table);
-				free(vlant[vlan].bctag);
-				free(vlant[vlan].bcuntag);
-				free(vlant[vlan].notlearning);
-				vlant[vlan].table = NULL;
-				vlant[vlan].bctag = NULL;
-				vlant[vlan].bcuntag = NULL;
-				vlant[vlan].notlearning = NULL;
+				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				printlog(LOG_ERR, "Numport resize failed portv %s", errorbuff);
+				exit(1);
+			}
+			for (index = 0; index < NUMOFVLAN; index++)
+			{
+				if (vlant[index].table)
+				{
+					vlant[index].table = ba_realloc(vlant[index].table, numports, parameter->paramValue.intValue);
+					if (vlant[index].table == NULL)
+					{
+						strerror_s(errorbuff, sizeof(errorbuff), errno);
+						printlog(LOG_ERR, "Numport resize failed vlan tables vlan table %s", errorbuff);
+						exit(1);
+					}
+				}
+				if (vlant[index].bctag)
+				{
+					vlant[index].bctag = ba_realloc(vlant[index].bctag, numports, parameter->paramValue.intValue);
+					if (vlant[index].bctag == NULL)
+					{
+						strerror_s(errorbuff, sizeof(errorbuff), errno);
+						printlog(LOG_ERR, "Numport resize failed vlan tables vlan bctag %s", errorbuff);
+						exit(1);
+					}
+				}
+				if (vlant[index].bcuntag)
+				{
+					vlant[index].bcuntag = ba_realloc(vlant[index].bcuntag, numports, parameter->paramValue.intValue);
+					if (vlant[index].bcuntag == NULL)
+					{
+						strerror_s(errorbuff, sizeof(errorbuff), errno);
+						printlog(LOG_ERR, "Numport resize failed vlan tables vlan bctag %s", errorbuff);
+						exit(1);
+					}
+				}
+				if (vlant[index].notlearning)
+				{
+					vlant[index].notlearning = ba_realloc(vlant[index].notlearning, numports, parameter->paramValue.intValue);
+					if (vlant[index].notlearning == NULL)
+					{
+						strerror_s(errorbuff, sizeof(errorbuff), errno);
+						printlog(LOG_ERR, "Numport resize failed vlan tables vlan notlearning %s", errorbuff);
+						exit(1);
+					}
+				}
+			}
+			for (index = numports; index < parameter->paramValue.intValue; index++)
+			{
+				portv[index] = NULL;
+			}
 #ifdef FSTP
-				fstremovevlan(vlan);
+			fstsetnumports(val);
 #endif
-				return 0;
-			}
+			numports = parameter->paramValue.intValue;
+			return 0;
 		}
 		else
+		{
+			return EINVAL;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+int portsethub(struct comparameter* parameter)
+{
+	if(!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		if (parameter->paramValue.intValue)
+		{
+#ifdef FSTP
+			fstpshutdown();
+#endif
+			portflag(P_SETFLAG, HUB_TAG);
+		}
+		else
+		{
+			portflag(P_CLRFLAG, HUB_TAG);
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
+}
+
+int portsetvlan(struct comparameter* parameter)
+{
+	uint32_t port = 0;
+	int vlan = 0;
+	int oldvlan = 0;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_string)
+	{
+		if (sscanf_s(parameter->paramValue.stringValue, "%i %i", &port, &vlan) != 2)
+		{
+			return EINVAL;
+		}
+		/* port NOVLAN is okay here, it means NO untagged traffic */
+		if (vlan <0 || vlan > NUMOFVLAN || port < 0 || port >= numports)
+		{
+			return EINVAL;
+		}
+		if ((vlan != NOVLAN && !bac_check(validvlan, vlan)) || portv[port] == NULL)
 		{
 			return ENXIO;
 		}
+		oldvlan = portv[port]->vlanuntag;
+		portv[port]->vlanuntag = NOVLAN;
+		hash_delete_port(port);
+		if (portv[port]->ep != NULL)
+		{
+			/*changing active port*/
+			if (oldvlan != NOVLAN)
+			{
+				ba_clr(vlant[oldvlan].bcuntag, port);
+			}
+			if (vlan != NOVLAN)
+			{
+				ba_set(vlant[vlan].bcuntag, port);
+				ba_clr(vlant[vlan].bctag, port);
+			}
+#ifdef FSTP
+			if (oldvlan != NOVLAN)
+			{
+				fstdelport(oldvlan, port);
+			}
+			if (vlan != NOVLAN)
+			{
+				fstaddport(vlan, port, 0);
+			}
+#endif
+		}
+		if (oldvlan != NOVLAN)
+		{
+			ba_clr(vlant[oldvlan].table, port);
+		}
+		if (vlan != NOVLAN)
+		{
+			ba_set(vlant[vlan].table, port);
+		}
+		portv[port]->vlanuntag = vlan;
+	}
+	return 0;
+}
+
+int portcreateauto(struct comparameter* parameter/*FILE* fd*/)
+{
+	int port = 0; 
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_file && parameter->paramType == com_param_type_null )
+	{
+		port = alloc_port(0);
+		if (port < 0)
+		{
+			return ENOSPC;
+		}
+
+		portv[port]->flag |= NOTINPOOL;
+		printoutc(parameter->data1.file_descriptor, "Port %04d", port);
+	}
+	return 0;
+}
+
+int portcreate(struct comparameter* parameter)
+{
+	int port = 0 ;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (portv == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_unsigned_int)
+	{
+		if (parameter->paramValue.intValue < 0 || parameter->paramValue.intValue >= numports)
+		{
+			return EINVAL;
+		}
+		if (portv[parameter->paramValue.intValue] != NULL)
+		{
+			return EEXIST;
+		}
+		port = alloc_port(parameter->paramValue.intValue);
+		if (port < 0)
+		{
+			return ENOSPC;
+		}
+		portv[port]->flag |= NOTINPOOL;
 	}
 	else
 	{
-		return EINVAL;
+		errno = EINVAL;
+		return -1;
 	}
-}
-
-int vlanaddport(char* arg)
-{
-	int port, vlan;
-	if (sscanf_s(arg, "%i %i", &vlan, &port) != 2)
-		return EINVAL;
-	if (vlan < 0 || vlan >= NUMOFVLAN - 1 || port < 0 || port >= numports)
-		return EINVAL;
-	if (!bac_check(validvlan, vlan) || portv[port] == NULL)
-		return ENXIO;
-	if (portv[port]->ep != NULL && portv[port]->vlanuntag != vlan) {
-		/* changing active port*/
-		ba_set(vlant[vlan].bctag, port);
-#ifdef FSTP
-		fstaddport(vlan, port, 1);
-#endif
-	}
-	ba_set(vlant[vlan].table, port);
 	return 0;
 }
 
-int vlandelport(char* arg)
+int portremove(struct comparameter* parameter)
 {
-	int port, vlan;
-	if (sscanf_s(arg, "%i %i", &vlan, &port) != 2)
-		return EINVAL;
-	if (vlan < 0 || vlan >= NUMOFVLAN - 1 || port < 0 || port >= numports)
-		return EINVAL;
-	if (!bac_check(validvlan, vlan) || portv[port] == NULL)
-		return ENXIO;
-	if (portv[port]->vlanuntag == vlan)
-		return EADDRINUSE;
-	if (portv[port]->ep != NULL) {
-		/*changing active port*/
-		ba_clr(vlant[vlan].bctag, port);
-#ifdef FSTP
-		fstdelport(vlan, port);
-#endif
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
 	}
-	ba_clr(vlant[vlan].table, port);
-	hash_delete_port(port);
-	return 0;
-}
-
-
-int vlanprint(FILE* fd, char* arg)
-{
-	if (*arg != 0) {
-		int vlan;
-		vlan = atoi(arg);
-		if (vlan >= 0 && vlan < NUMOFVLAN - 1) {
-			if (bac_check(validvlan, vlan))
-				vlanprintactive(vlan, fd);
-			else
-				return ENXIO;
-		}
-		else
+	if (portv == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_unsigned_int)
+	{
+		if (parameter->paramValue.intValue < 0 || parameter->paramValue.intValue >= numports)
+		{
 			return EINVAL;
+		}
+		if (portv[parameter->paramValue.intValue] == NULL)
+		{
+			return ENXIO;
+		}
+		if (portv[parameter->paramValue.intValue]->ep != NULL)
+		{
+			return EADDRINUSE;
+		}
+		free_port(parameter->paramValue.intValue);
 	}
 	else
-		bac_FORALLFUN(1, validvlan, NUMOFVLAN, vlanprintactive, fd);
+	{
+		errno = EINVAL;
+		return -1;
+	}
 	return 0;
 }
 
-int vlanprintall(FILE* fd, char* arg)
+int portallocatable(struct comparameter* parameter)
 {
-	if (*arg != 0) {
-		int vlan;
-		vlan = atoi(arg);
-		if (vlan > 0 && vlan < NUMOFVLAN - 1) {
-			if (bac_check(validvlan, vlan))
-				vlanprintelem(vlan, fd);
-			else
-				return ENXIO;
+	uint32_t port= 0 ; 
+	int value = 0 ;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		if (sscanf_s(parameter->paramValue.stringValue, "%i %i", &port, &value) != 2)
+		{
+			return EINVAL;
+		}
+		if (port < 0 || port >= numports)
+		{
+			return EINVAL;
+		}
+		if (portv[port] == NULL)
+		{
+			return ENXIO;
+		}
+		if (value)
+		{
+			portv[port]->flag &= ~NOTINPOOL;
 		}
 		else
-			return EINVAL;
+		{
+			portv[port]->flag |= NOTINPOOL;
+		}
 	}
 	else
-		bac_FORALLFUN(1,validvlan, NUMOFVLAN, vlanprintelem, fd);
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
+}
+
+int portsetuser(struct comparameter* parameter)
+{
+	uint32_t port = 0 ;
+	uint32_t user_id = 0;
+	char* portuid =NULL;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		portuid = parameter->paramValue.stringValue;
+		while (*portuid != 0 && *portuid == ' ')
+		{
+			portuid++;
+		}
+		while (*portuid != 0 && *portuid != ' ')
+		{
+			portuid++;
+		}
+		while (*portuid != 0 && *portuid == ' ')
+		{
+			portuid++;
+		}
+		if (sscanf_s(parameter->paramValue.stringValue, "%i", &port) != 1 || *portuid == 0)
+		{
+			return EINVAL;
+		}
+		if (port < 0 || port >= numports)
+		{
+			return EINVAL;
+		}
+		if (portv[port] == NULL)
+		{
+			return ENXIO;
+		}
+		user_id = GetUserIdFunction();
+		if (user_id != -1)
+		{
+			portv[port]->user = user_id;
+		}
+		else if (strcmp(portuid, "NONE") == 0 || strcmp(portuid, "ANY") == 0)
+		{
+			portv[port]->user = -1;
+		}
+		else
+		{
+			return EINVAL;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1 ;
+	}
+	return 0;
+}
+
+int portsetgroup(struct comparameter* parameter)
+{
+	uint32_t port = 0 ;
+	char* portgid = NULL;
+	uint32_t group_id = 0;
+	struct group* groupval=NULL;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		portgid = parameter->paramValue.stringValue;
+		while (*portgid != 0 && *portgid == ' ')
+		{
+			portgid++;
+		}
+		while (*portgid != 0 && *portgid != ' ')
+		{
+			portgid++;
+		}
+		while (*portgid != 0 && *portgid == ' ')
+		{
+			portgid++;
+		}
+		if (sscanf_s(parameter->paramValue.stringValue, "%i", &port) != 1 || *portgid == 0)
+		{
+			return EINVAL;
+		}
+		if (port < 0 || port >= numports)
+		{
+			return EINVAL;
+		}
+		if (portv[port] == NULL)
+		{
+			return ENXIO;
+		}
+		groupval = GetGroupFunction(parameter->paramValue.stringValue);
+		if (groupval != NULL)
+		{
+			portv[port]->group = groupval->groupid;
+		}
+		else if (strcmp(portgid, "NONE") == 0 || strcmp(portgid, "ANY") == 0)
+		{
+			portv[port]->group = -1;
+		}
+		else
+		{
+			return EINVAL;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
+}
+
+int epclose(struct comparameter* parameter)
+{
+
+	int port = 0 ;
+	int id = 0 ;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		if (sscanf_s(parameter->paramValue.stringValue, "%i %i", &port, &id) != 2)
+		{
+			return EINVAL;
+		}
+		else
+		{
+			return close_ep_port_fd(port, id);
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+//int print_ptable(FILE* fd, char* arg)
+int print_ptable(struct comparameter * parameter)
+{
+	uint32_t index = 0;
+	if (!parameter) {
+		errno = EINVAL;
+		return - 1;
+	}
+	if (parameter->type1 != com_type_file || parameter->data1.file_descriptor == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if(parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL )
+	{
+		index = atoi(parameter->paramValue.stringValue);
+		if (index < 0 || index >= numports)
+		{
+			return EINVAL;
+		}
+		else 
+		{
+			return print_port(parameter->data1.file_descriptor, index, 0);
+		}
+	}
+	else
+	{
+		for (index = 0; index < numports; index++)
+		{
+			print_port(parameter->data1.file_descriptor, index, 0);
+		}
+		return 0;
+	}
+}
+
+//int print_ptableall(FILE* fd, char* arg)
+int print_ptableall(struct comparameter * parameter)
+{
+	uint32_t index=0;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (
+		parameter->type1 == com_type_file &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL)
+	{
+		if (*parameter->paramValue.stringValue != 0)
+		{
+			index = atoi(parameter->paramValue.stringValue);
+			if (index < 0 || index >= numports)
+			{
+				return EINVAL;
+			}
+			else
+			{
+				return print_port(parameter->data1.file_descriptor, index, 1);
+			}
+		}
+		else
+		{
+			for (index = 0; index < numports; index++)
+			{
+				print_port(parameter->data1.file_descriptor, index, 1);
+			}
+			return 0;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+//int vlancreate(int vlan)
+int vlancreate(struct comparameter* parameter)
+{
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		if (parameter->paramValue.intValue > 0 && parameter->paramValue.intValue < NUMOFVLAN - 1)
+		{ /*vlan NOVLAN (0xfff a.k.a. 4095) is reserved */
+			if (bac_check(validvlan, parameter->paramValue.intValue))
+			{
+				return EEXIST;
+			}
+			else
+			{
+				return vlancreate_nocheck(parameter->paramValue.intValue);
+			}
+		}
+		else
+		{
+			return EINVAL;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+//int vlanremove(int vlan)
+int vlanremove(struct comparameter* parameter)
+{
+	int index = 0;
+	int is_used = 0;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (vlant == NULL)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		if (parameter->paramValue.intValue >= 0 && parameter->paramValue.intValue < NUMOFVLAN)
+		{
+			if (bac_check(validvlan, parameter->paramValue.intValue))
+			{
+
+				ba_FORALL(1, vlant[parameter->paramValue.intValue].table, numports, is_used++, index);
+				if (is_used)
+				{
+					return EADDRINUSE;
+				}
+				else
+				{
+					bac_clr(validvlan, NUMOFVLAN, parameter->paramValue.intValue);
+					free(vlant[parameter->paramValue.intValue].table);
+					free(vlant[parameter->paramValue.intValue].bctag);
+					free(vlant[parameter->paramValue.intValue].bcuntag);
+					free(vlant[parameter->paramValue.intValue].notlearning);
+					vlant[parameter->paramValue.intValue].table = NULL;
+					vlant[parameter->paramValue.intValue].bctag = NULL;
+					vlant[parameter->paramValue.intValue].bcuntag = NULL;
+					vlant[parameter->paramValue.intValue].notlearning = NULL;
+#ifdef FSTP
+					fstremovevlan(vlan);
+#endif
+					return 0;
+				}
+			}
+			else
+			{
+				return ENXIO;
+			}
+		}
+		else
+		{
+			return EINVAL;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+int vlanaddport(struct comparameter* parameter)
+{
+	uint32_t port = 0;
+	int vlan = 0;
+	if (!parameter) {
+		errno = EINVAL;
+		return -1;
+	}
+	if (
+		parameter->type1 = com_type_null &&
+		parameter->paramType == com_param_type_string && 
+		parameter->paramValue.stringValue != NULL)
+	{
+		if (sscanf_s(parameter->paramValue.stringValue, "%i %i", &vlan, &port) != 2)
+		{
+			return EINVAL;
+		}
+		if (vlan < 0 || vlan >= NUMOFVLAN - 1 || port < 0 || port >= numports)
+		{
+			return EINVAL;
+		}
+		if (!bac_check(validvlan, vlan) || portv[port] == NULL)
+		{
+			return ENXIO;
+		}
+		if (portv[port]->ep != NULL && portv[port]->vlanuntag != vlan)
+		{
+			/* changing active port*/
+			ba_set(vlant[vlan].bctag, port);
+#ifdef FSTP
+			fstaddport(vlan, port, 1);
+#endif
+		}
+		ba_set(vlant[vlan].table, port);
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
+}
+
+int vlandelport(struct comparameter* parameter)
+{
+	uint32_t port = 0;
+	int vlan = 0;
+	if (!parameter) {
+		errno = EINVAL;
+		return -1;
+	}
+	if (
+		parameter->type1 = com_type_null &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL)
+	{
+		if (sscanf_s(parameter->paramValue.stringValue, "%i %i", &vlan, &port) != 2)
+		{
+			return EINVAL;
+		}
+		if (vlan < 0 || vlan >= NUMOFVLAN - 1 || port < 0 || port >= numports)
+		{
+			return EINVAL;
+		}
+		if (!bac_check(validvlan, vlan) || portv[port] == NULL)
+		{
+			return ENXIO;
+		}
+		if (portv[port]->vlanuntag == vlan)
+		{
+			return EADDRINUSE;
+		}
+		if (portv[port]->ep != NULL)
+		{
+			/*changing active port*/
+			ba_clr(vlant[vlan].bctag, port);
+#ifdef FSTP
+			fstdelport(vlan, port);
+#endif
+		}
+		ba_clr(vlant[vlan].table, port);
+		hash_delete_port(port);
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
+}
+
+
+//int vlanprint(FILE* fd, char* arg)
+int vlanprint(struct comparameter* parameter)
+{
+	int vlan = 0;
+	if (!parameter)
+	{
+		errno = -1;
+		return -1;
+	}
+	if (
+		parameter->type1 = com_type_null &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL)
+	{
+		if (*parameter->paramValue.stringValue != 0)
+		{
+			vlan = atoi(parameter->paramValue.stringValue);
+			if (vlan >= 0 && vlan < NUMOFVLAN - 1)
+			{
+				if (bac_check(validvlan, vlan))
+				{
+					vlanprintactive(vlan, parameter->data1.file_descriptor);
+				}
+				else
+				{
+					return ENXIO;
+				}
+			}
+			else
+			{
+				return EINVAL;
+			}
+		}
+		else
+		{
+			bac_FORALLFUN(1, validvlan, NUMOFVLAN, vlanprintactive, parameter->data1.file_descriptor);
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	return 0;
+}
+
+//int vlanprintall(FILE* fd, char* arg)
+int vlanprintall(struct comparameter* parameter)
+{
+	if (!parameter)
+	{
+		errno = -1;
+		return -1;
+	}
+	if (
+		parameter->type1 = com_type_null &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL)
+	{
+		if (*parameter->paramValue.stringValue != 0) {
+			int vlan;
+			vlan = atoi(parameter->paramValue.stringValue);
+			if (vlan > 0 && vlan < NUMOFVLAN - 1)
+			{
+				if (bac_check(validvlan, vlan))
+				{
+					vlanprintelem(vlan, parameter->data1.file_descriptor);
+				}
+				else
+				{
+					return ENXIO;
+				}
+			}
+			else
+			{
+				return EINVAL;
+			}
+		}
+		else
+		{
+			bac_FORALLFUN(1, validvlan, NUMOFVLAN, vlanprintelem, parameter->data1.file_descriptor);
+		}
+	}
+	else
+	{
+		errno = -1;
+		return -1;
+	}
 	return 0;
 }
 
@@ -644,7 +1090,7 @@ int portflag(int op, int f)
 
 int alloc_port(unsigned int portno)
 {
-	int index = portno;
+	uint32_t index = portno;
 	if (index == 0) {
 		/* take one */
 		for (index = 1; index < numports && portv[index] != NULL &&
@@ -734,7 +1180,7 @@ void free_port(unsigned int portno)
 	}
 }
 
-int close_ep_port_fd(int portno, int fd_ctl)
+int close_ep_port_fd(uint32_t portno, int fd_ctl)
 {
 	int rv = 0;
 	struct port* port = NULL;

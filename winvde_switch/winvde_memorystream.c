@@ -33,7 +33,7 @@ typedef struct _memory_file {
 } MEMORYFILE, * LPMEMORYFILE;
 
 struct _memory_file* open_memorystream(char** buffer, size_t** size);
-int write_memorystream(struct _memory_file* file, const char* buff, size_t buffsize);
+size_t write_memorystream(struct _memory_file* file, const char* buff, size_t buffsize);
 char* get_buffer(struct _memory_file* file);
 
 struct _memory_file* open_memorystream(char** buffer, size_t** size)
@@ -67,9 +67,10 @@ struct _memory_file* open_memorystream(char** buffer, size_t** size)
             return NULL;
         }
     }
+    return NULL;
 }
 
-int write_memorystream(struct _memory_file* file, const char* buff, size_t buffsize)
+size_t write_memorystream(struct _memory_file* file, const char* buff, size_t buffsize)
 {
     size_t remaining = 0;
     size_t written = 0;
@@ -166,12 +167,14 @@ char* get_buffer(struct _memory_file* file)
         }
         return file->final_buffer;
     }
+    return NULL;
 }
 
 int close_memorystream(struct _memory_file* file)
 {
     struct _buffer_chain* ptr = NULL;
     struct _buffer_chain* save = NULL;
+    int returnCode = -1;
     if (file != NULL)
     {
         ptr = file->buffer_chain;
@@ -191,5 +194,7 @@ int close_memorystream(struct _memory_file* file)
             free(file->final_buffer);
         }
         free(file);
+        returnCode = 0;
     }
+    return returnCode;
 }

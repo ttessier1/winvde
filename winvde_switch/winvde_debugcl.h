@@ -36,30 +36,15 @@ struct dbgcl {
 	struct dbgcl* next;
 };
 
-struct dbgcl* dbgclh;
+extern struct dbgcl* dbgclh;
 
-struct dbgcl** dbgclt;
+extern struct dbgcl** dbgclt;
 
 void adddbgcl(size_t ncl, struct dbgcl* cl);
 void deldbgcl(size_t ncl, struct dbgcl* cl);
-void debugout(struct dbgcl* cl, const char* format, ...);
-void eventout(struct dbgcl* cl, ...);
-int packetfilter(struct dbgcl* cl, ...);
 
 
-#define ADDDBGCL(CL) adddbgcl(sizeof(CL)/sizeof(struct dbgcl),(CL))
-int packetfilter(struct dbgcl* cl, ...);
-#define DBGOUT(CL, FORMAT, ...) \
-	if (((CL)->nfds) > 0) debugout((CL), (FORMAT), __VA_ARGS__)
-#define EVENTOUT(CL, ...) \
-	if (((CL)->nfun) > 0) eventout((CL), __VA_ARGS__)
-#define PACKETFILTER(CL, PORT, BUF, LEN) \
-	(((CL)->nfun) == 0 || ((LEN)=packetfilter((CL), (PORT), (BUF), (LEN))))
-
- #else
-
-#define DBGOUT(CL, ...)
-#define EVENTOUT(CL, ...)
-#define PACKETFILTER(CL, PORT, BUF, LEN)  (LEN)
+#define ADDDBGCL(CL) \
+	adddbgcl(sizeof(CL)/sizeof(struct dbgcl),(CL))
 
 #endif

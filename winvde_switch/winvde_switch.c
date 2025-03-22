@@ -276,7 +276,7 @@ void StartModules()
     StartTunTap();
 }
 
-void CleanUp()
+void CleanUp(void)
 {
     struct winvde_module* software_modules;
     FileCleanUp();

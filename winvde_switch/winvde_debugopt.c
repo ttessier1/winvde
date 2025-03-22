@@ -3,15 +3,20 @@
 #include <errno.h>
 #include <string.h>
 
+#include "winvde_debugcl.h"
 #include "winvde_debugopt.h"
 #include "winvde_output.h"
-#include "winvde_debugcl.h"
 #include "winvde_comlist.h"
+#include "winvde_ev.h"
+#include "winvde_printfunc.h"
 
 #define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
 #define DEBUGFORMAT2 "%-22s %03o %-6s %s"
 
 #if defined(DEBUGOPT)
+
+static char _dbgnl = '\n';
+
 //int debuglist(FILE* f, int fd, char* path)
 int debuglist(struct comparameter * parameter)
 {
@@ -30,8 +35,10 @@ int debuglist(struct comparameter * parameter)
 		file_stream = parameter->data1.file_descriptor;
 		printoutc(file_stream, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
 		printoutc(file_stream, DEBUGFORMAT1, "------------", "---", "------", "----");
-		for (p = dbgclh; p != NULL; p = p->next) {
-			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0) {
+		for (p = dbgclh; p != NULL; p = p->next)
+		{
+			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
+			{
 				for (i = 0; i < p->nfds && p->fds[i] != file_stream; i++)
 				{
 					;
@@ -44,13 +51,9 @@ int debuglist(struct comparameter * parameter)
 	return rv;
 }
 
-/* EINVAL -> no matches
- * EEXIST -> all the matches already include fd
- * ENOMEM -> fd buffer realloc failed
- * 0 otherwise */
-int debugadd(struct comparameter* parameter){
-//int debugadd(int fd, char* path) {
-	struct dbgcl* p;
+int debugadd(struct comparameter* parameter)
+{
+	struct dbgcl* p=NULL;
 	int rv = EINVAL;
 	int index;
 	if (!parameter)
@@ -58,33 +61,51 @@ int debugadd(struct comparameter* parameter){
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL && parameter->paramType == com_param_type_string && parameter->paramValue != NULL)
+	if (
+		parameter->type1 == com_type_file && 
+		parameter->data1.file_descriptor != NULL && 
+		parameter->paramType == com_param_type_string && 
+		parameter->paramValue.stringValue != NULL
+	)
 	{
-		for (p = dbgclh; p != NULL; p = p->next) {
+		for (p = dbgclh; p != NULL; p = p->next)
+		{
 			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0) {
 				
-				if (rv == EINVAL) rv = EEXIST;
-				for (index = 0; index < p->nfds && (p->fds[index] != fd); index++)
+				if (rv == EINVAL)
+				{
+					rv = EEXIST;
+				}
+				for (index = 0; index < p->nfds && (p->fds[index] != parameter->data1.socket); index++)
 				{
 					;
 				}
-				if (index >= p->nfds) {
-					if (index >= p->maxfds) {
+				if (index >= p->nfds)
+				{
+					if (index >= p->maxfds)
+					{
 						int newsize = p->maxfds + DBGCLSTEP;
-						p->fds = realloc(p->fds, newsize * sizeof(int));
-						if (p->fds) {
+						p->fds = (SOCKET*)realloc(p->fds, newsize * sizeof(int));
+						if (p->fds)
+						{
 							p->maxfds = newsize;
-							p->fds[index] = fd;
+							p->fds[index] = parameter->data1.socket;
 							p->nfds++;
 							if (rv != ENOMEM) rv = 0;
 						}
 						else
+						{
 							rv = ENOMEM;
+						}
 					}
-					else {
-						p->fds[index] = fd;
+					else
+					{
+						p->fds[index] = parameter->data1.socket;
 						p->nfds++;
-						if (rv != ENOMEM) rv = 0;
+						if (rv != ENOMEM)
+						{
+							rv = 0;
+						}
 					}
 				}
 			}
@@ -115,7 +136,7 @@ int debugdel(struct comparameter* parameter) {
 			if (strncmp(p->path, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0) {
 				int i;
 				if (rv == EINVAL) rv = ENOENT;
-				for (i = 0; i < p->nfds && (p->fds[i] != fd); i++)
+				for (i = 0; i < p->nfds && (p->fds[i] != parameter->data1.socket); i++)
 				{
 					;
 				}
@@ -151,72 +172,30 @@ void debugout(struct dbgcl* cl, const char* format, ...)
 	free(msg);
 }
 
-int eventadd(int (*fun)(), char* path, void* arg) {
-	struct dbgcl* p;
-	int rv = EINVAL;
-	for (p = dbgclh; p != NULL; p = p->next) {
-		if (strncmp(p->path, path, strlen(path)) == 0) {
-			int i;
-			if (rv == EINVAL) rv = EEXIST;
-			for (i = 0; i < p->nfun && (p->fun[i] != fun); i++)
-				;
-			if (i >= p->nfun) {
-				if (i >= p->maxfun) {
-					int newsize = p->maxfun + DBGCLSTEP;
-					p->fun = realloc(p->fun, newsize * sizeof(int));
-					p->funarg = realloc(p->funarg, newsize * sizeof(void*));
-					if (p->fun && p->funarg) {
-						p->maxfun = newsize;
-						p->fun[i] = fun;
-						p->funarg[i] = arg;
-						p->nfun++;
-						if (rv != ENOMEM) rv = 0;
-					}
-					else
-						rv = ENOMEM;
-				}
-				else {
-					p->fun[i] = fun;
-					p->nfun++;
-					if (rv != ENOMEM) rv = 0;
-				}
-			}
-		}
-	}
-	return rv;
-}
-
-/* EINVAL -> no matches
- * ENOENT -> all the matches do not include fun
- * 0 otherwise */
-int eventdel(int (*fun)(), char* path, void* arg) {
-	struct dbgcl* p;
-	int rv = EINVAL;
-	for (p = dbgclh; p != NULL; p = p->next) {
-		if (strncmp(p->path, path, strlen(path)) == 0) {
-			int i;
-			if (rv == EINVAL) rv = ENOENT;
-			for (i = 0; i < p->nfun && (p->fun[i] != fun) && (p->funarg[i] != arg); i++)
-				;
-			if (i < p->nfun) {
-				p->nfun--; /* the last one */
-				p->fun[i] = p->fun[p->nfun]; /* swap it with the deleted element*/
-				rv = 0;
-			}
-		}
-	}
-	return rv;
-}
-
-void eventout(struct dbgcl* cl, ...)
+int packetfilter(struct dbgcl* cl, ...)
 {
 	int i;
 	va_list arg;
-	for (i = 0; i < cl->nfun; i++) {
+	int len;
+	va_start(arg, cl);
+	(void)va_arg(arg, int); /*port*/
+	(void)va_arg(arg, char*); /*buf*/
+	len = va_arg(arg, int);
+	va_end(arg);
+	for (i = 0; i < cl->nfun && len>0; i++) {
 		va_start(arg, cl);
-		(cl->fun[i])(cl, cl->funarg[i], arg);
+		int rv = (cl->fun[i])(cl, cl->funarg[i], arg);
 		va_end(arg);
+		if (rv != 0)
+			len = rv;
 	}
+	if (len < 0)
+		return 0;
+	else
+		return len;
 }
+
+
+
 
 #endif

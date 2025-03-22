@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 struct group {
     char* groupname;
     uint32_t groupid;

@@ -9,7 +9,7 @@ extern unsigned int gc_timer_no;
 
 void hash_gc(void* arg);
 void gc(struct hash_entry* hash_entry_value, void* now);
-int hash_set_gc_interval(int interval);
-int hash_set_gc_expire(int expire);
+int hash_set_gc_interval(struct comparameter* parameter);
+int hash_set_gc_expire(struct comparameter* parameter);
 int hash_get_gc_interval();
 int hash_get_gc_expire();
