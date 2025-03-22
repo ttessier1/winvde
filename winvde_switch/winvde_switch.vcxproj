@@ -105,7 +105,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUGOPT</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUGOPT;VDEPLUGIN;</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <StringPooling>
       </StringPooling>
@@ -126,7 +126,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUGOPT</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);DEBUGOPT;VDEPLUGIN;</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
@@ -154,6 +154,7 @@
     <ClCompile Include="winvde_datasock.c" />
     <ClCompile Include="winvde_mgmt.c" />
     <ClCompile Include="winvde_output.c" />
+    <ClCompile Include="winvde_plugin.c" />
     <ClCompile Include="winvde_port.c" />
     <ClCompile Include="winvde_printfunc.c" />
     <ClCompile Include="winvde_qtimer.c" />
@@ -183,6 +184,7 @@
     <ClInclude Include="winvde_modsupport.h" />
     <ClInclude Include="winvde_module.h" />
     <ClInclude Include="winvde_output.h" />
+    <ClInclude Include="winvde_plugin.h" />
     <ClInclude Include="winvde_printfunc.h" />
     <ClInclude Include="winvde_qtimer.h" />
     <ClInclude Include="winvde_sockutils.h" />
