@@ -94,7 +94,7 @@ void HashInit(uint32_t hash_size)
 	gc_timer_no = qtimer_add(gc_interval,0,hash_gc,NULL);
 	ADDCL(cl);
 #if defined(DEBUGOPT)
-	ADDDBGCL(dl);
+	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
 #endif
 }
 
@@ -190,6 +190,70 @@ void print_hash_entry(struct hash_entry* hash_entry_value, void* arg)
 		hash_entry_value->port, 
 		qtime() - hash_entry_value->last_seen);
 }
+
+/* looks in global hash table 'h' for given address, and return associated
+ * port */
+int find_in_hash(unsigned char* dst, int vlan)
+{
+	struct hash_entry* e = find_entry(extmac(dst, vlan));
+	if (e == NULL)
+	{
+		return -1;
+	}
+	return(e->port);
+}
+
+int find_in_hash_update(unsigned char* src, int vlan, int port)
+{
+	struct hash_entry* e;
+	uint64_t esrc = extmac(src, vlan);
+	int k = calc_hash(esrc);
+	int oldport;
+	time_t now;
+	for (e = hash_head[k]; e && e->dst != esrc; e = e->next)
+	{
+		;
+	}
+	if (e == NULL)
+	{
+		e = (struct hash_entry*)malloc(sizeof(*e));
+		if (e == NULL)
+		{
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_WARNING, "Failed to malloc hash entry %s", errorbuff);
+			return -1;
+		}
+
+		//DBGOUT(DBGHASHNEW, "%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d",
+		//	EMAC2MAC6(esrc), EMAC2VLAN2(esrc), port);
+		EVENTOUT(DBGHASHNEW, esrc);
+		e->dst = esrc;
+		if (hash_head[k] != NULL)
+		{
+			hash_head[k]->prev = &(e->next);
+		}
+		e->next = hash_head[k];
+		e->prev = &(hash_head[k]);
+		e->port = port;
+		hash_head[k] = e;
+	}
+	oldport = e->port;
+	now = qtime();
+	if (oldport != port)
+	{
+		if ((now - e->last_seen) > min_persistence)
+		{
+			e->port = port;
+			e->last_seen = now;
+		}
+	}
+	else
+	{
+		e->last_seen = now;
+	}
+	return oldport;
+}
+
 
 //int find_hash(FILE* fd, char* strmac)
 int find_hash(struct comparameter* parameter)
@@ -339,7 +403,7 @@ struct hash_entry* find_entry(uint64_t MAC)
 void delete_hash_entry(struct hash_entry* OLD)
 {
 #if defined(DEBUGOPT)
-	DBGOUT(DBGHASHDEL, "%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", EMAC2MAC6(OLD->dst), EMAC2VLAN2(OLD->dst), OLD->port);
+	//DBGOUT(DBGHASHDEL, "%02x:%02x:%02x:%02x:%02x:%02x VLAN %02x:%02x Port %d", EMAC2MAC6(OLD->dst), EMAC2VLAN2(OLD->dst), OLD->port);
 	EVENTOUT(DBGHASHDEL, OLD->dst);
 #endif
 	*((OLD)->prev) = (OLD)->next;

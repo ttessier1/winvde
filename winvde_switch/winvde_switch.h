@@ -1,5 +1,7 @@
 #pragma once
 
+#include <winsock2.h>
+
 #define PACKAGE_BUGREPORT "-no big report-"
 #define STDRCFILE "%USERPROFILE%\\.vde2\\vde_switch.rc"
 #define ETH_ALEN 6
@@ -31,3 +33,10 @@
 extern unsigned char switchmac[];
 extern const char* prog;
 extern char errorbuff[1024];
+
+void* mainloop_get_private_data(SOCKET fd);
+void mainloop_set_private_data(SOCKET fd, void* private_data);
+short mainloop_pollmask_get(SOCKET fd);
+void mainloop_pollmask_add(SOCKET fd, short events);
+void mainloop_pollmask_del(SOCKET fd, short events);
+void mainloop_pollmask_set(SOCKET fd, short events);

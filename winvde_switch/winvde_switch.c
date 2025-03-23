@@ -86,7 +86,7 @@ int main(const int argc, const char ** argv)
 
     SetMacAddress();
 
-    fprintf(stdout, "Ethernet Switch Mac: %02x:%02x:%02x:%02x:%02x:%02x", switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5] );
+    fprintf(stdout, "Ethernet Switch Mac: %02x:%02x:%02x:%02x:%02x:%02x\n", switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5] );
 
     SetSignalHandlers();
 
@@ -104,24 +104,31 @@ int main(const int argc, const char ** argv)
 
     // Needed before hash functions
     qtimer_init();
+    
+    fprintf(stdout, "Timer Init\n");
 
     HashInit(hash_size);
 
+    fprintf(stdout, "Hash Init\n");
 #ifdef FSTP
     fst_init(numports);
 #endif
 
     port_init(numports);
 
-    
+    fprintf(stdout, "Port Init\n");
 
     init_mods();
 
+    fprintf(stdout, "Mods Init\n");
+
     loadrcfile();
     
-    
+    fprintf(stdout, "Load RcFile\n");
     
     main_loop();
+
+    fprintf(stdout, "Main Loop\n");
 
     WSACleanup();
   
@@ -518,6 +525,53 @@ void Version()
         "named COPYING.\n");
     exit(0);
 }
+
+void* mainloop_get_private_data(SOCKET fd)
+{
+    if (fd >= 0 && fd < fdpermsize)
+        return (fdpp[fdperm[fd]]->private_data);
+    else
+        return NULL;
+}
+
+void mainloop_set_private_data(SOCKET fd, void* private_data)
+{
+    if (fd >= 0 && fd < fdpermsize)
+        fdpp[fdperm[fd]]->private_data = private_data;
+}
+
+short mainloop_pollmask_get(SOCKET fd)
+{
+#if DEBUG_MAINLOOP_MASK
+    if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n", fds[fdperm[fd]].fd, fd);
+#endif
+    return fds[fdperm[fd]].events;
+}
+
+void mainloop_pollmask_add(SOCKET fd, short events)
+{
+#if DEBUG_MAINLOOP_MASK
+    if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n", fds[fdperm[fd]].fd, fd);
+#endif
+    fds[fdperm[fd]].events |= events;
+}
+
+void mainloop_pollmask_del(SOCKET fd, short events)
+{
+#if DEBUG_MAINLOOP_MASK
+    if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n", fds[fdperm[fd]].fd, fd);
+#endif
+    fds[fdperm[fd]].events &= ~events;
+}
+
+void mainloop_pollmask_set(SOCKET fd, short events)
+{
+#if DEBUG_MAINLOOP_MASK
+    if (fds[fdperm[fd]].fd != fd) printf("PERMUTATION ERROR %d %d\n", fds[fdperm[fd]].fd, fd);
+#endif
+    fds[fdperm[fd]].events = events;
+}
+
 
 void main_loop()
 {

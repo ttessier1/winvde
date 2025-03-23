@@ -130,3 +130,94 @@ struct group * GetGroupFunction(const char * groupName)
     }
     return theGroup;
 }
+
+struct group* GetGroupFunctionW(const wchar_t* groupName)
+{
+    struct group* theGroup = NULL;
+    LPBYTE groupBuffer = NULL;
+    DWORD numberOfEntries = 0;
+    DWORD totalNumberOfEntries = 0;
+    DWORD_PTR resumeHandle = 0;
+    DWORD index = 0;
+    LOCALGROUP_INFO_0* lpGroupInfo = NULL;
+    size_t nameLength = 0;
+    wchar_t* wideGroupName = NULL;
+
+
+    if (!groupName)
+    {
+        errno = EINVAL;
+        return NULL;
+    }
+    nameLength = wcslen(groupName);
+
+    
+    if (NetLocalGroupEnum(NULL, 0, &groupBuffer, MAX_PREFERRED_LENGTH, &numberOfEntries, &totalNumberOfEntries, &resumeHandle) == NERR_Success)
+    {
+        lpGroupInfo = (LOCALGROUP_INFO_0*)groupBuffer;
+        for (index = 0; index < numberOfEntries; index++)
+        {
+            fwprintf(stdout, L"Group Name:%s\n", lpGroupInfo[index].lgrpi0_name);
+            if (wcscmp(groupName, lpGroupInfo[index].lgrpi0_name) == 0)
+            {
+                theGroup = (struct group*)malloc(sizeof(struct group));
+                if (theGroup)
+                {
+                    theGroup->groupid = index;
+                    theGroup->groupname = (char*)groupName;
+                }
+                break;
+            }
+        }
+        NetApiBufferFree(groupBuffer);
+    }
+    else
+    {
+        fprintf(stderr, "Failed to get local groups: %d\n", GetLastError());
+    }
+    if (wideGroupName)
+    {
+        free(wideGroupName);
+        wideGroupName = NULL;
+    }
+    return theGroup;
+}
+
+#ifdef VDE_BIONIC
+int UserIsInGroup(uid_t uid, gid_t gid) { return 0; }
+#else
+/* 1 if user belongs to the group, 0 otherwise) */
+int UserIsInGroup(uint32_t uid, uint32_t gid)
+{
+    DWORD entries = 0;
+    DWORD totalEntries = 0;
+    struct group* theGroup = NULL;
+    wchar_t* username = GetUserNameFunction();
+    LPBYTE buffer= NULL;
+    LOCALGROUP_USERS_INFO_0* lpGroups = NULL;
+
+    int returnCode = 0;
+    if (username != NULL)
+    {
+        if (NetUserGetLocalGroups(NULL, username, 0, 0, &buffer, MAX_PREFERRED_LENGTH, &entries, &totalEntries) == ERROR_SUCCESS)
+        {
+            lpGroups = (LOCALGROUP_USERS_INFO_0*)buffer;
+            theGroup = GetGroupFunctionW(lpGroups->lgrui0_name);
+            if (theGroup != NULL)
+            {
+                if (gid == theGroup->groupid)
+                {
+                    returnCode = 1;
+                }
+                else
+                {
+                    returnCode = 0;
+                }
+                free(theGroup);
+            }
+        }
+        free(username);
+    }
+    return returnCode;
+}
+#endif

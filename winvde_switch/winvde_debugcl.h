@@ -19,9 +19,9 @@
 #define D_FSTP 040
 #define D_HUP 01
 
-#if defined( DEBUGOPT)
+#if defined(DEBUGOPT)
 
-typedef int (*intfun)();
+typedef int (*intfun)(struct dbgcl*);
 
 struct dbgcl {
 	char* path; /* debug path for add/del */
@@ -44,8 +44,5 @@ extern struct dbgcl** dbgclt;
 void adddbgcl(size_t ncl, struct dbgcl* cl);
 void deldbgcl(size_t ncl, struct dbgcl* cl);
 
-
-#define ADDDBGCL(CL) \
-	adddbgcl(sizeof(CL)/sizeof(struct dbgcl),(CL))
 
 #endif

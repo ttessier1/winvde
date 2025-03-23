@@ -11,3 +11,4 @@
 void StartConsMgmt(void);
 void loadrcfile(void);
 void RunDaemon();
+void setmgmtperm(char* path);

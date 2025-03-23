@@ -33,7 +33,6 @@
 #include "winvde_plugin.h"
 
 #if defined(DEBUGOPT)
-#define DBGCLSTEP 8
 
 #define MGMTPORTNEW (dl) 
 #define MGMTPORTDEL (dl+1) 
@@ -83,9 +82,9 @@ static struct comlist cl[] = {
 	{"load","path","load a configuration script",runscript,STRARG | WITHFD},
 #if defined(DEBUGOPT)
 	{"debug","============","DEBUG MENU",NULL,NOARG},
-	{"debug/list","","list debug categories",debuglist,STRARG | WITHFILE | WITHFD},
-	{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD | STRARG},
-	{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD | STRARG},
+	//{"debug/list","","list debug categories",debuglist,STRARG | WITHFILE | WITHFD},
+	//{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD | STRARG},
+	//{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD | STRARG},
 #endif
 #if defined(VDEPLUGIN)
 	{"plugin","============","PLUGINS MENU",NULL,NOARG},
@@ -123,7 +122,7 @@ char* pidfile = NULL;
 char* rcfile = NULL;
 char* mgmt_socket = NULL;
 
-// function declarations
+// private function declarations
 void mgmt_usage();
 int mgmt_parse_options(const int c, const char* optarg);
 void mgmt_init(void);
@@ -144,7 +143,7 @@ void StartConsMgmt(void)
 	mgmgt_module.cleanup = mgmt_cleanup;
 	ADDCL(cl);
 #if defined(DEBUGOPT)
-	ADDDBGCL(dl);
+	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
 #endif
 	add_module(&mgmgt_module);
 #if defined(DEBUGOPT)
@@ -261,16 +260,17 @@ void mgmt_init(void)
 			printlog(LOG_ERR, "mgmt socket: %s", errorbuff);
 			return;
 		}
-		if (setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char*)&one,sizeof(one)) < 0) {
+		
+		/*if (setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof(one)) < 0) {
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printlog(LOG_ERR, "mgmt setsockopt: %s", errorbuff);
 			return;
-		}
+		}*/
 		if(ioctlsocket(mgmtconnfd, FIONBIO,&one)==SOCKET_ERROR)
 		{
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printlog(LOG_ERR, "Setting O_NONBLOCK on mgmt fd: %s", errorbuff);
-			return;
+			//return;
 		}
 		sun.sun_family = PF_UNIX;
 		snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", mgmt_socket);
@@ -292,6 +292,11 @@ void mgmt_init(void)
 		mgmt_ctl = add_type(&mgmgt_module, 0);
 		mgmt_data = add_type(&mgmgt_module, 0);
 		add_fd(mgmtconnfd, mgmt_ctl, NULL);
+	}
+	else
+	{
+		fprintf(stdout, "WARNING: Skipping management socket\n");
+		return;
 	}
 
 }
@@ -333,7 +338,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 				parameter.type2 = com_type_null;
 				parameter.paramType = com_param_type_string;
 				parameter.paramValue.stringValue = "";
-				debugdel(&parameter);
+				//debugdel(&parameter);
 #endif
 				remove_fd(fd);
 			}
@@ -362,7 +367,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 					parameter.type2 = com_type_null;
 					parameter.paramType = com_param_type_string;
 					parameter.paramValue.stringValue = "";
-					debugdel(&parameter);
+					//debugdel(&parameter);
 #endif
 					remove_fd(fd);
 				}
@@ -836,3 +841,9 @@ void sighupmgmt(int signo)
 	EVENTOUT(MGMTSIGHUP, signo);
 }
 #endif
+
+void setmgmtperm(char* path)
+{
+	//chmod(path, mgmt_mode);
+	//chown(path, -1, mgmt_group);
+}

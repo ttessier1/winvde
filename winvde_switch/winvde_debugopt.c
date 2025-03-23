@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "winvde_debugcl.h"
 #include "winvde_debugopt.h"
@@ -19,7 +20,7 @@
 //int debuglist(FILE* f, int fd, char* path)
 static int debuglist(struct comparameter * parameter)
 {
-/*#define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
+#define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
 #define DEBUGFORMAT2 "%-22s %03o %-6s %s"
 	SOCKET socket_stream = INVALID_SOCKET;
 	char* buffer = NULL;
@@ -56,13 +57,12 @@ static int debuglist(struct comparameter * parameter)
 			}
 		}
 	}
-	return rv;*/
-	return -1;
+	return rv;
 }
 
 static int debugadd(struct comparameter* parameter)
 {
-	/*struct dbgcl* p = NULL;
+	struct dbgcl* p = NULL;
 	int rv = EINVAL;
 	int index;
 	if (!parameter)
@@ -120,15 +120,14 @@ static int debugadd(struct comparameter* parameter)
 			}
 		}
 	}
-	return rv;*/
-	return -1;
+	return rv;
 }
 
 /* EINVAL -> no matches
  * ENOENT -> all the matches do not include fd
  * 0 otherwise */
 static int debugdel(struct comparameter* parameter) {
-	/*struct dbgcl* p;
+	struct dbgcl* p;
 	int rv = EINVAL;
 	if (!parameter)
 	{
@@ -158,13 +157,12 @@ static int debugdel(struct comparameter* parameter) {
 			}
 		}
 	}
-	return rv; */
-	return -1;
+	return rv;
 }
 
 static void debugout(struct dbgcl* cl, const char* format, ...)
 {
-	/*va_list arg;
+	va_list arg;
 	char* msg;
 	int i;
 	char* header;
@@ -182,31 +180,32 @@ static void debugout(struct dbgcl* cl, const char* format, ...)
 		writev(cl->fds[i], iov, 3);
 	}
 	free(header);
-	free(msg);*/
+	free(msg);
 }
 
-int packetfilter(struct dbgcl* cl, ...)
+int packetfilter(struct dbgcl* cl, unsigned short port, char* buff, int length)
 {
-	/*int i;
+	unsigned short index=0;
 	va_list arg;
-	int len;
-	va_start(arg, cl);
-	(void)va_arg(arg, int);
-	(void)va_arg(arg, char*);
-	len = va_arg(arg, int);
-	va_end(arg);
-	for (i = 0; i < cl->nfun && len>0; i++) {
-		va_start(arg, cl);
-		int rv = (cl->fun[i])(cl, cl->funarg[i], arg);
-		va_end(arg);
-		if (rv != 0)
-			len = rv;
+	int returnValue = 0;
+	for (index = 0; index < cl->nfun && length>0; index++)
+	{
+		//va_start(arg, cl);
+		returnValue = (cl->fun[index])(cl);
+		//va_end(arg);
+		if (returnValue != 0)
+		{
+			length = returnValue;
+		}
 	}
-	if (len < 0)
+	if (length < 0)
+	{
 		return 0;
+	}
 	else
-		return len;*/
-	return 0;
+	{
+		return length;
+	}
 }
 
 #endif

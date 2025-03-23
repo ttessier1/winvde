@@ -60,43 +60,58 @@ uint32_t numports;
 int stdqlen = 128;
 #endif
 
-struct endpoint {
-	int port;
-	int fd_ctl;
-	int fd_data;
-	char* descr;
-#ifdef VDE_PQ2
-	struct vdepq* vdepq;
-	int vdepq_count;
-	int vdepq_max;
-#endif
-	struct endpoint* next;
-};
 
-struct port {
-	struct endpoint* ep;
-	int flag;
-	/* sender is already inside ms, but it needs one more memaccess */
-	int (*sender)(int fd_ctl, int fd_data, void* packet, int len, int port);
-	struct mod_support* ms;
-	int vlanuntag;
-	uint32_t user;
-	uint32_t group;
-	uint32_t curuser;
-#ifdef FSTP
-	int cost;
-#endif
-#ifdef PORTCOUNTERS
-	long long pktsin, pktsout, bytesin, bytesout;
-#endif
-};
+
+#define TAG2UNTAG(P,LEN) \
+	memmove((char *)(P)+4,(P),2*ETH_ALEN); LEN -= 4 ; \
+	(struct packet *)((char *)(P)+4); 
+
+#define UNTAG2TAG(P,VLAN,LEN) \
+	memmove((char *)(P)-4,(P),2*ETH_ALEN); LEN += 4 ; \
+	(P)->header.src[2]=0x81; (P)->header.src[3]=0x00;\
+	(P)->header.src[4]=(VLAN >> 8); (P)->header.src[5]=(VLAN);\
+	(struct packet *)((char *)(P)-4); 
 
 #define STRSTATUS(PN,V) \
 	((ba_check(vlant[(V)].notlearning,(PN))) ? "Discarding" : \
 	 (ba_check(vlant[(V)].bctag,(PN)) || ba_check(vlant[(V)].bcuntag,(PN))) ? \
 	 "Forwarding" : "Learning")
 
+#if !defined(VDE_PQ2)
+#define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN) \
+	 struct port *Port=(PORT); \
+	 if (packetfilter(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
+	 struct endpoint *ep; \
+	 SEND_COUNTER_UPD(Port,LEN); \
+	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
+	 Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port); \
+	 }
+#else
+#define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN,TMPBUF) \
+	 struct port *Port=(PORT); \
+	 if (packetfilter(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
+	 struct endpoint *ep; \
+	 SEND_COUNTER_UPD(Port,LEN); \
+	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
+	 if (ep->vdepq_count || \
+		 Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port) == -EWOULDBLOCK) {\
+	 if (ep->vdepq_count < ep->vdepq_max) \
+	 ep->vdepq_count += vdepq_add(&(ep->vdepq), (PACKET), (LEN), TMPBUF); \
+	 if (ep->vdepq_count == 1) mainloop_pollmask_add(ep->fd_data, POLLOUT);\
+	 } \
+	 } 
+#endif
 
+#ifdef PORTCOUNTERS
+#define SEND_COUNTER_UPD(Port,LEN)\
+	Port->pktsout++; \
+	Port->bytesout +=len;
+#else
+#define SEND_COUNTER_UPD(Port,LEN)
+#endif
+
+#define IS_BROADCAST(addr)\
+	((addr[0] & 1) == 1)
 
 struct {
 	bitarray table;
@@ -188,7 +203,7 @@ void port_init(int init_num_ports)
 	}
 	ADDCL(cl);
 #if defined(DEBUGOPT)
-	ADDDBGCL(dl);
+	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
 #endif
 	if (vlancreate_nocheck(0) != 0) {
 		printlog(LOG_ERR, "ALLOC vlan port data structures");
@@ -1112,7 +1127,7 @@ int alloc_port(unsigned int portno)
 			else
 			{
 #if defined(DEBUGOPT)
-				DBGOUT(DBGPORTNEW, "%02d", index);
+//				DBGOUT(DBGPORTNEW, "%02d", index);
 				EVENTOUT(DBGPORTNEW, index);
 #endif
 				portv[index] = port;
@@ -1180,7 +1195,7 @@ void free_port(unsigned int portno)
 	}
 }
 
-int close_ep_port_fd(uint32_t portno, int fd_ctl)
+int close_ep_port_fd(uint32_t portno, SOCKET fd_ctl)
 {
 	int rv = 0;
 	struct port* port = NULL;
@@ -1190,7 +1205,7 @@ int close_ep_port_fd(uint32_t portno, int fd_ctl)
 			rv = rec_close_ep(&(port->ep), fd_ctl);
 			if (port->ep == NULL) {
 #if defined(DEBUGOPT)
-				DBGOUT(DBGPORTDEL, "%02d", portno);
+				//DBGOUT(DBGPORTDEL, "%02d", portno);
 				EVENTOUT(DBGPORTDEL, portno);
 #endif
 				hash_delete_port(portno);
@@ -1278,16 +1293,6 @@ void vlanprintactive(int vlan, FILE* fd)
 					}
 				}
 			}
-			//X = vlant[vlan].table;
-			//N = numports
-			//EXPR = ({ int tagged = portv[i]->vlanuntag != vlan;if (portv[i]->ep) printoutc(fd, " -- Port %04d tagged=%d active=1 status=%s", i, tagged,STRSTATUS(i, vlan));})
-			// K = i
-		/*ba_FORALL(vlant[vlan].table, numports,
-			({ int tagged = portv[i]->vlanuntag != vlan;
-			 if (portv[i]->ep)
-			 printoutc(fd," -- Port %04d tagged=%d active=1 status=%s", i, tagged,
-				 STRSTATUS(i,vlan));
-				}), i);*/
 #ifdef FSTP
 	}
 #endif
@@ -1319,13 +1324,13 @@ char* port_getgroup(int gid)
 }
 
 
-int rec_close_ep(struct endpoint** pep, int fd_ctl)
+int rec_close_ep(struct endpoint** pep, SOCKET fd_ctl)
 {
 	struct endpoint* this = *pep;
 	if (this != NULL) {
 		if (this->fd_ctl == fd_ctl) {
 #if defined(DEBUGOPT)
-			DBGOUT(DBGEPDEL, "Port %02d FD %2d", this->port, fd_ctl);
+			//DBGOUT(DBGEPDEL, "Port %02d FD %2d", this->port, fd_ctl);
 			EVENTOUT(DBGEPDEL, this->port, fd_ctl);
 #endif
 			*pep = this->next;
@@ -1344,7 +1349,374 @@ int rec_close_ep(struct endpoint** pep, int fd_ctl)
 		return ENXIO;
 }
 
+int close_ep(struct endpoint* ep)
+{
+	return close_ep_port_fd(ep->port, ep->fd_ctl);
+}
+
 int ep_get_port(struct endpoint* ep)
 {
 	return ep->port;
+}
+
+void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
+{
+	int tarport;
+	int vlan, tagged;
+	int port = ep->port;
+	uint32_t index;
+	int last;
+	void* tmpbuf = NULL;
+	void* tmpbuft = NULL;
+	void* tmpbufu = NULL;
+	unsigned int __ifa1;
+	unsigned int __jfa1;
+	bitarrayelem __vfa1;
+	uint32_t maxfa1;
+
+	//DG minimum length of a packet is 60 bytes plus trailing CRC
+	if (len < 60)
+	{
+		memset(packet->data + len, 0, 60 - len);
+		len = 60;
+	}
+	if(packetfilter(dl+5,port,(char*)packet,len))
+	//if (PACKETFILTER(PKTFILTIN, port, packet, len))
+	{
+#ifdef PORTCOUNTERS
+		portv[port]->pktsin++;
+		portv[port]->bytesin += len;
+#endif
+		if (pflag & HUB_TAG)
+		{ /* this is a HUB */
+#if !defined(VDE_PQ2)
+			for (index = 1; index < numports; index++)
+			{
+				if ((index != port) && (portv[index] != NULL))
+				{
+					SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+				}
+			}
+#else
+			for (index = 1; index < numports; index++)
+			{
+				if ((index != port) && (portv[index] != NULL))
+				{
+					SEND_PACKET_PORT(portv[index], index, packet, len, &tmpbuf);
+				}
+			}
+#endif
+		}
+		else
+		{ /* This is a switch, not a HUB! */
+			if (packet->header.proto[0] == 0x81 && packet->header.proto[1] == 0x00)
+			{
+				tagged = 1;
+				vlan = ((packet->data[0] << 8) + packet->data[1]) & 0xfff;
+				if (!ba_check(vlant[vlan].table, port))
+				{
+					return; /*discard unwanted packets*/
+				}
+			}
+			else
+			{
+				tagged = 0;
+				if ((vlan = portv[port]->vlanuntag) == NOVLAN)
+				{
+					return; /*discard unwanted packets*/
+				}
+			}
+
+#if defined(FSTP)
+			/* when it works as a HUB or FSTP is off, MST packet must be forwarded */
+			if (ISBPDU(packet) && fstflag(P_GETFLAG, FSTP_TAG))
+			{
+				fst_in_bpdu(port, packet, len, vlan, tagged);
+				return; /* BPDU packets are not forwarded */
+			}
+#endif
+			/* The port is in blocked status, no packet received */
+			if (ba_check(vlant[vlan].notlearning, port))
+			{
+				return;
+			}
+
+			/* We don't like broadcast source addresses */
+			if (!(IS_BROADCAST(packet->header.src)))
+			{
+
+				last = find_in_hash_update(packet->header.src, vlan, port);
+				/* old value differs from actual input port */
+				if (last >= 0 && (port != last))
+				{
+					printlog(LOG_INFO, "MAC %02x:%02x:%02x:%02x:%02x:%02x moved from port %d to port %d", packet->header.src[0], packet->header.src[1], packet->header.src[2], packet->header.src[3], packet->header.src[4], packet->header.src[5], last, port);
+				}
+			}
+			/* static void send_dst(int port,struct packet *packet, int len) */
+			if (IS_BROADCAST(packet->header.dest) ||
+				(tarport = find_in_hash(packet->header.dest, vlan)) < 0)
+			{
+				/* FST HERE! broadcast only on active ports*/
+				/* no cache or broadcast/multicast == all ports *except* the source port! */
+				/* BROADCAST: tag/untag. Broadcast the packet untouched on the ports
+				 * of the same tag-ness, then transform it to the other tag-ness for the others*/
+				if (tagged)
+				{
+#if !defined(VDE_PQ2)
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bctag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) { 
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1; 
+								if (index != port)
+								{
+									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+								}
+							}
+						}
+					}
+
+					packet = TAG2UNTAG(packet, len);
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bcuntag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+								}
+							}
+						}
+					}
+#else
+					
+					ba_FORALL(3,vlant[vlan].bctag, numports,
+						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbuft); }), index);
+					packet = TAG2UNTAG(packet, len);
+					ba_FORALL(4,vlant[vlan].bcuntag, numports,
+						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbufu); }), index);
+#endif
+				}
+				else
+				{ /* untagged */
+#if !defined(VDE_PQ2)
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bcuntag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+								}
+							}
+						}
+					}
+
+					packet = UNTAG2TAG(packet, vlan, len);
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bctag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+								}
+							}
+						}
+					}
+#else
+					ba_FORALL(7,vlant[vlan].bcuntag, numports,
+						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbufu); }), index);
+					packet = UNTAG2TAG(packet, vlan, len);
+					ba_FORALL(8,vlant[vlan].bctag, numports,
+						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbuft); }), index);
+#endif
+				}
+			}
+			else
+			{
+				/* the hash table should not generate tarport not in vlan
+				 * any time a port is removed from a vlan, the port is flushed from the hash */
+				if (tarport == port)
+				{
+					return; /*do not loop!*/
+				}
+#ifndef VDE_PQ2
+				if (tagged)
+				{
+					if (portv[tarport]->vlanuntag == vlan)
+					{ /* TAG->UNTAG */
+						packet = TAG2UNTAG(packet, len);
+						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+					}
+					else
+					{                               /* TAG->TAG */
+						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+					}
+				}
+				else {
+					if (portv[tarport]->vlanuntag == vlan)
+					{ /* UNTAG->UNTAG */
+						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+					}
+					else
+					{                              /* UNTAG->TAG */
+						packet = UNTAG2TAG(packet, vlan, len);
+						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+					}
+				}
+#else
+				if (tagged)
+				{
+					if (portv[tarport]->vlanuntag == vlan)
+					{ /* TAG->UNTAG */
+						packet = TAG2UNTAG(packet, len);
+						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+					}
+					else
+					{                               /* TAG->TAG */
+						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+					}
+				}
+				else {
+					
+					if (portv[tarport]->vlanuntag == vlan)
+					{ /* UNTAG->UNTAG */
+						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+					}
+					else
+					{ /* UNTAG->TAG */
+						packet = UNTAG2TAG(packet, vlan, len);
+						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+					}
+				}
+#endif
+			} /* if(BROADCAST) */
+		} /* if(HUB) */
+	} /* if(PACKETFILTER) */
+}
+
+void setup_description(struct endpoint* ep, char* descr)
+{
+	//DBGOUT(DBGPORTDESCR, "Port %02d FD %2d -> \"%s\"", ep->port, ep->fd_ctl, descr);
+	EVENTOUT(DBGPORTDESCR, ep->port, ep->fd_ctl, descr);
+	ep->descr = descr;
+}
+
+/* initialize a new endpoint */
+struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t user, struct mod_support* modfun)
+{
+	struct port* port;
+	struct endpoint* ep;
+	unsigned int __ifa1;
+	unsigned int __jfa1;
+	bitarrayelem __vfa1;
+	int __nfa1;
+	if ((portno = alloc_port(portno)) >= 0)
+	{
+		port = portv[portno];
+		if (port->ep == NULL && checkport_ac(port, user) == 0)
+		{
+			port->curuser = user;
+		}
+		if (port->curuser == user &&
+			(ep = malloc(sizeof(struct endpoint))) != NULL)
+		{
+			//DBGOUT(DBGEPNEW, "Port %02d FD %2d", portno, fd_ctl);
+			EVENTOUT(DBGEPNEW, portno, fd_ctl);
+			port->ms = modfun;
+			port->sender = modfun->sender;
+			ep->port = portno;
+			ep->fd_ctl = fd_ctl;
+			ep->fd_data = fd_data;
+			ep->descr = NULL;
+#ifdef VDE_PQ2
+			ep->vdepq = NULL;
+			ep->vdepq_count = 0;
+			ep->vdepq_max = stdqlen;
+#endif
+			if (port->ep == NULL)
+			{/* WAS INACTIVE */
+				int i;
+				/* copy all the vlan defs to the active vlan defs */
+				ep->next = port->ep;
+				port->ep = ep;
+				
+				__nfa1 = validvlan[__WORDSIZEROUND(NUMOFVLAN)];
+				for (__ifa1 = 0; __nfa1 > 0; __ifa1++)
+				{
+					for (__vfa1 = (validvlan)[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+					{
+						if (__vfa1 & 1)
+						{
+							i = __ifa1 * __VDEWORDSIZE + __jfa1;
+							if (ba_check(vlant[i].table, portno)) {
+								ba_set(vlant[i].bctag, portno);
+#ifdef FSTP
+								fstaddport(i, portno, (i != port->vlanuntag));
+#endif
+							}
+							__nfa1--;
+						}
+					}
+				}
+				if (port->vlanuntag != NOVLAN) {
+					ba_set(vlant[port->vlanuntag].bcuntag, portno);
+					ba_clr(vlant[port->vlanuntag].bctag, portno);
+					ba_clr(vlant[port->vlanuntag].notlearning, portno);
+				}
+			}
+			else
+			{
+				ep->next = port->ep;
+				port->ep = ep;
+			}
+			return ep;
+		}
+		else
+		{
+			if (port->curuser != user)
+			{
+				errno = EADDRINUSE;
+			}
+			else
+			{
+				errno = ENOMEM;
+			}
+			return NULL;
+		}
+	}
+	else
+	{
+		errno = ENOMEM;
+		return NULL;
+	}
+}
+
+int checkport_ac(struct port* port, uint32_t user)
+{
+	/*unrestricted*/
+	if (port->user == -1 && port->group == -1)
+		return 0;
+	/*root or restricted to a specific user*/
+	else if (user == 0 || (port->user != -1 && port->user == user))
+		return 0;
+	/*restricted to a group*/
+	else if (port->group != -1 && UserIsInGroup(user, port->group)==1)
+		return 0;
+	else {
+		errno = EPERM;
+		return -1;
+	}
 }

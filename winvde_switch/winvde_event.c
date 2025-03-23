@@ -6,7 +6,7 @@
 
 #if defined(DEBUGOPT)
 
-int eventadd(int (*fun)(), char* path, void* arg) {
+int eventadd(int (*fun)(struct dbgcl*), char* path, void* arg) {
 	struct dbgcl* p;
 	int rv = EINVAL;
 	for (p = dbgclh; p != NULL; p = p->next) {
@@ -44,7 +44,7 @@ int eventadd(int (*fun)(), char* path, void* arg) {
 /* EINVAL -> no matches
  * ENOENT -> all the matches do not include fun
  * 0 otherwise */
-int eventdel(int (*fun)(), char* path, void* arg) {
+int eventdel(int (*fun)(struct dbgcl*), char* path, void* arg) {
 	struct dbgcl* p;
 	int rv = EINVAL;
 	for (p = dbgclh; p != NULL; p = p->next) {
@@ -68,11 +68,10 @@ int eventdel(int (*fun)(), char* path, void* arg) {
 void eventout(struct dbgcl* cl, ...)
 {
 	int i;
-	va_list arg;
 	for (i = 0; i < cl->nfun; i++) {
-		va_start(arg, cl);
-		(cl->fun[i])(cl, cl->funarg[i], arg);
-		va_end(arg);
+		//va_start(arg, cl);
+		(cl->fun[i])(cl);
+		//va_end(arg);
 	}
 }
 
