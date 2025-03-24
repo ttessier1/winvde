@@ -10,9 +10,9 @@
 
 #if defined(DEBUGOPT)
 
-struct dbgcl* dbgclh = NULL;
+struct dbgcl* dbg_cl_header = NULL;
 
-struct dbgcl** dbgclt = &dbgclh;
+struct dbgcl** dbgclt = &dbg_cl_header;
 
 void adddbgcl(size_t ncl, struct dbgcl* cl)
 {
@@ -41,7 +41,7 @@ void deldbgcl(size_t ncl, struct dbgcl* cl)
 	}
 	for (index = 0; index < (uint32_t)ncl; index++, cl++)
 	{
-		p = &dbgclh;
+		p = &dbg_cl_header;
 		while (*p != NULL)
 		{
 			if (*p == cl)

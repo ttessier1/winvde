@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <io.h>
 #include <direct.h>
 #include <sys/stat.h>
 
@@ -317,7 +318,9 @@ void datasock_handle_io(unsigned char type, SOCKET fd, int revents, void* arg)
 	{
 #ifdef VDE_PQ2
 		if (revents & POLLOUT)
+		{
 			handle_out_packet(ep);
+		}
 #endif
 		if (revents & POLLIN) {
 
@@ -508,7 +511,7 @@ struct endpoint* new_port_v1_v3(SOCKET fd_ctl, int type_port, struct sockaddr_un
 		/* no break: falltrough */
 	case REQ_NEW_CONTROL:
 		if (sun_out->sun_path[0] != 0) { //not for unnamed sockets
-			if (access(sun_out->sun_path, R_OK | W_OK) != 0) { //socket error
+			if (_access(sun_out->sun_path, R_OK | W_OK) != 0) { //socket error
 				remove_fd(fd_ctl);
 				return NULL;
 			}

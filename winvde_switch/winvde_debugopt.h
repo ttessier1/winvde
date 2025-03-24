@@ -13,7 +13,7 @@ int debugadd(struct comparameter* parameter);
 int debugdel(struct comparameter* parameter);
 void debugout(struct dbgcl* cl, const char* format, ...);
 
-int packetfilter(struct dbgcl* cl, unsigned short port, char* buff, int length);
+int packet_filter(struct dbgcl* cl, unsigned short port, char* buff, int length);
 
 #define DBGOUT(CL, FORMAT, ...) if (((CL)->nfds) > 0) debugout((CL), (FORMAT), __VA_ARGS__)
 

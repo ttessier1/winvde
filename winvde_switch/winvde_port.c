@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <io.h>
 
 
 #include "winvde_port.h"
@@ -16,6 +17,8 @@
 #include "winvde_debugopt.h"
 #include "winvde_event.h"
 #include "winvde_user.h"
+#include "winvde_packetq.h"
+
 
 
 #define D_PACKET 01000
@@ -55,7 +58,7 @@ struct dbgcl dl[] = {
 #define NOTINPOOL 0x8000
 
 int pflag = 0;
-uint32_t numports;
+uint16_t numports;
 #ifdef VDE_PQ2
 int stdqlen = 128;
 #endif
@@ -77,29 +80,10 @@ int stdqlen = 128;
 	 (ba_check(vlant[(V)].bctag,(PN)) || ba_check(vlant[(V)].bcuntag,(PN))) ? \
 	 "Forwarding" : "Learning")
 
-#if !defined(VDE_PQ2)
-#define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN) \
-	 struct port *Port=(PORT); \
-	 if (packetfilter(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
-	 struct endpoint *ep; \
-	 SEND_COUNTER_UPD(Port,LEN); \
-	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
-	 Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port); \
-	 }
+#ifdef PORTCOUNTERS
+#define SEND_COUNTER_UPD(Port,LEN) ({Port->pktsout++; Port->bytesout +=len;})
 #else
-#define SEND_PACKET_PORT(PORT,PORTNO,PACKET,LEN,TMPBUF) \
-	 struct port *Port=(PORT); \
-	 if (packetfilter(PKTFILTOUT,(PORTNO),(PACKET), (LEN))) {\
-	 struct endpoint *ep; \
-	 SEND_COUNTER_UPD(Port,LEN); \
-	 for (ep=Port->ep; ep != NULL; ep=ep->next) \
-	 if (ep->vdepq_count || \
-		 Port->ms->sender(ep->fd_ctl, ep->fd_data, (PACKET), (LEN), ep->port) == -EWOULDBLOCK) {\
-	 if (ep->vdepq_count < ep->vdepq_max) \
-	 ep->vdepq_count += vdepq_add(&(ep->vdepq), (PACKET), (LEN), TMPBUF); \
-	 if (ep->vdepq_count == 1) mainloop_pollmask_add(ep->fd_data, POLLOUT);\
-	 } \
-	 } 
+#define SEND_COUNTER_UPD(Port,LEN)
 #endif
 
 #ifdef PORTCOUNTERS
@@ -1380,7 +1364,7 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 		memset(packet->data + len, 0, 60 - len);
 		len = 60;
 	}
-	if(packetfilter(dl+5,port,(char*)packet,len))
+	if(packet_filter(PKTFILTIN,port,(char*)packet,len))
 	//if (PACKETFILTER(PKTFILTIN, port, packet, len))
 	{
 #ifdef PORTCOUNTERS
@@ -1394,7 +1378,7 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 			{
 				if ((index != port) && (portv[index] != NULL))
 				{
-					SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+					send_packet_port(portv[index], index, (char*)packet, len);
 				}
 			}
 #else
@@ -1402,7 +1386,7 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 			{
 				if ((index != port) && (portv[index] != NULL))
 				{
-					SEND_PACKET_PORT(portv[index], index, packet, len, &tmpbuf);
+					send_packet_port(portv[index], index, (char*)packet, len, &tmpbuf);
 				}
 			}
 #endif
@@ -1472,7 +1456,7 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 								(index) = __ifa1 * __VDEWORDSIZE + __jfa1; 
 								if (index != port)
 								{
-									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+									send_packet_port(portv[index], index, (char*)packet, len);
 								}
 							}
 						}
@@ -1488,18 +1472,42 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
 								if (index != port)
 								{
-									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+									send_packet_port(portv[index], index, (char*)packet, len);
 								}
 							}
 						}
 					}
 #else
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bctag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									send_packet_port(portv[index], index, (char*)packet, len, &tmpbuft);
+								}
+							}
+						}
+					}
 					
-					ba_FORALL(3,vlant[vlan].bctag, numports,
-						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbuft); }), index);
 					packet = TAG2UNTAG(packet, len);
-					ba_FORALL(4,vlant[vlan].bcuntag, numports,
-						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbufu); }), index);
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bcuntag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									send_packet_port(portv[index], index, (char*)packet, len, &tmpbufu);
+								}
+							}
+						}
+					}
 #endif
 				}
 				else
@@ -1514,7 +1522,7 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
 								if (index != port)
 								{
-									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+									send_packet_port(portv[index], index, (char*)packet, len);
 								}
 							}
 						}
@@ -1530,17 +1538,42 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
 								if (index != port)
 								{
-									SEND_PACKET_PORT(portv[index], index, (char*)packet, len);
+									send_packet_port(portv[index], index, (char*)packet, len);
 								}
 							}
 						}
 					}
 #else
-					ba_FORALL(7,vlant[vlan].bcuntag, numports,
-						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbufu); }), index);
-					packet = UNTAG2TAG(packet, vlan, len);
-					ba_FORALL(8,vlant[vlan].bctag, numports,
-						({ if (index != port) SEND_PACKET_PORT(portv[index],index,packet,len,&tmpbuft); }), index);
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bcuntag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									send_packet_port(portv[index], index, (char*)packet, len, &tmpbuft);
+								}
+							}
+						}
+					}
+
+					packet = TAG2UNTAG(packet, len);
+					maxfa1 = __WORDSIZEROUND(numports);
+					for (__ifa1 = 0; __ifa1 < maxfa1; __ifa1++)
+					{
+						for (__vfa1 = vlant[vlan].bctag[__ifa1], __jfa1 = 0; __jfa1 < __VDEWORDSIZE; __vfa1 >>= 1, __jfa1++)
+						{
+							if (__vfa1 & 1) {
+								(index) = __ifa1 * __VDEWORDSIZE + __jfa1;
+								if (index != port)
+								{
+									send_packet_port(portv[index], index, (char*)packet, len, &tmpbufu);
+								}
+							}
+						}
+					}
 #endif
 				}
 			}
@@ -1558,22 +1591,22 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 					if (portv[tarport]->vlanuntag == vlan)
 					{ /* TAG->UNTAG */
 						packet = TAG2UNTAG(packet, len);
-						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len);
 					}
 					else
 					{                               /* TAG->TAG */
-						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len);
 					}
 				}
 				else {
 					if (portv[tarport]->vlanuntag == vlan)
 					{ /* UNTAG->UNTAG */
-						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len);
 					}
 					else
 					{                              /* UNTAG->TAG */
 						packet = UNTAG2TAG(packet, vlan, len);
-						SEND_PACKET_PORT(portv[tarport], tarport, (char*)packet, len);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len);
 					}
 				}
 #else
@@ -1582,23 +1615,23 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len)
 					if (portv[tarport]->vlanuntag == vlan)
 					{ /* TAG->UNTAG */
 						packet = TAG2UNTAG(packet, len);
-						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len, &tmpbuf);
 					}
 					else
 					{                               /* TAG->TAG */
-						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len, &tmpbuf);
 					}
 				}
 				else {
 					
 					if (portv[tarport]->vlanuntag == vlan)
 					{ /* UNTAG->UNTAG */
-						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len, &tmpbuf);
 					}
 					else
 					{ /* UNTAG->TAG */
 						packet = UNTAG2TAG(packet, vlan, len);
-						SEND_PACKET_PORT(portv[tarport], tarport, packet, len, &tmpbuf);
+						send_packet_port(portv[tarport], tarport, (char*)packet, len, &tmpbuf);
 					}
 				}
 #endif
@@ -1720,3 +1753,157 @@ int checkport_ac(struct port* port, uint32_t user)
 		return -1;
 	}
 }
+
+
+#if !defined(VDE_PQ2)
+void send_packet_port(struct port* Port, unsigned short portno, char* packet, int len)
+#else
+void send_packet_port(struct port* Port, unsigned short portno, char* packet, int len, void ** tmpBuff)
+#endif
+{
+	struct endpoint* ep = NULL;
+#if !defined(VDE_PQ2)
+	if (Port)
+	{
+		if (packetfilter(PKTFILTOUT, portno, packet, len))
+		{
+			
+			SEND_COUNTER_UPD(Port, LEN);
+			for (ep = Port->ep; ep != NULL; ep = ep->next)
+			{
+				Port->ms->sender(ep->fd_ctl, ep->fd_data, packet, len, ep->port);
+			}
+		}
+	}
+#else
+		if (packet_filter(PKTFILTOUT, portno, packet, len))
+		{
+			SEND_COUNTER_UPD(Port, LEN);
+			for (ep = Port->ep; ep != NULL; ep = ep->next)
+			{
+				if (ep->vdepq_count ||
+					Port->ms->sender(ep->fd_ctl, ep->fd_data, packet, len, ep->port) == -EWOULDBLOCK)
+				{
+					if (ep->vdepq_count < ep->vdepq_max)
+					{
+						ep->vdepq_count += vdepq_add(&(ep->vdepq), packet, len, tmpBuff);
+						if (ep->vdepq_count == 1)
+						{
+							mainloop_pollmask_add(ep->fd_data, POLLOUT);
+						}
+					}
+				}
+			}
+		}
+#endif
+	
+}
+
+#ifdef VDE_PQ2
+
+//int defqlen(int len)
+int defqlen(struct comparameter * parameter)
+{
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
+	{
+		if (parameter->paramValue.intValue < 0)
+		{
+			return EINVAL;
+		}
+		else {
+			stdqlen = parameter->paramValue.intValue;
+			return 0;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+//int epqlen(char* arg)
+int epqlen(struct comparameter* parameter)
+{
+	uint16_t port;
+	int id;
+	int len;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		if (sscanf_s(parameter->paramValue.stringValue, "%i %i %i", (int*) & port, &id, &len) != 3 || len < 0)
+		{
+			return EINVAL;
+		}
+		else
+		{
+			return setqlen_ep_port_fd(port, id, len);
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+}
+
+int rec_setqlen_ep(struct endpoint* ep, SOCKET fd_ctl, int len)
+{
+	struct endpoint* this = ep;
+	if (this != NULL)
+	{
+		if (this->fd_ctl == fd_ctl)
+		{
+			ep->vdepq_max = len;
+			return 0;
+		}
+		else
+		{
+			return rec_setqlen_ep(this->next, fd_ctl, len);
+		}
+	}
+	else
+	{
+		return ENXIO;
+	}
+}
+
+int setqlen_ep_port_fd(uint16_t portno, SOCKET fd_ctl, int len)
+{
+	if (portno >= 0 && portno < numports) {
+		struct port* port = portv[portno];
+		if (port != NULL) {
+			return rec_setqlen_ep(port->ep, fd_ctl, len);
+		}
+		else
+			return ENXIO;
+	}
+	else
+		return EINVAL;
+}
+
+int trysendfun(struct endpoint* ep, void* packet, int len)
+{
+	int port = ep->port;
+	return portv[port]->ms->sender(ep->fd_ctl, ep->fd_data, packet, len, port);
+}
+
+void handle_out_packet(struct endpoint* ep)
+{
+	//printf("handle_out_packet %d\n",ep->vdepq_count);
+	ep->vdepq_count -= vdepq_try(&(ep->vdepq), ep, trysendfun);
+	if (ep->vdepq_count == 0)
+	{
+		mainloop_pollmask_del(ep->fd_data, POLLOUT);
+	}
+}
+#endif

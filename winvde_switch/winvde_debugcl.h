@@ -37,7 +37,7 @@ struct dbgcl {
 	struct dbgcl* next;
 };
 
-extern struct dbgcl* dbgclh;
+extern struct dbgcl* dbg_cl_header;
 
 extern struct dbgcl** dbgclt;
 

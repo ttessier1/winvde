@@ -9,31 +9,60 @@
 int eventadd(int (*fun)(struct dbgcl*), char* path, void* arg) {
 	struct dbgcl* p;
 	int rv = EINVAL;
-	for (p = dbgclh; p != NULL; p = p->next) {
-		if (strncmp(p->path, path, strlen(path)) == 0) {
+	if (!fun || !path)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	for (p = dbg_cl_header; p != NULL; p = p->next)
+	{
+		if (strncmp(p->path, path, strlen(path)) == 0)
+		{
 			int i;
-			if (rv == EINVAL) rv = EEXIST;
+			if (rv == EINVAL)
+			{
+				rv = EEXIST;
+			}
 			for (i = 0; i < p->nfun && (p->fun[i] != fun); i++)
+			{
 				;
-			if (i >= p->nfun) {
+			}
+			if (i >= p->nfun)
+			{
 				if (i >= p->maxfun) {
 					int newsize = p->maxfun + DBGCLSTEP;
-					p->fun = realloc(p->fun, newsize * sizeof(int));
-					p->funarg = realloc(p->funarg, newsize * sizeof(void*));
-					if (p->fun && p->funarg) {
-						p->maxfun = newsize;
-						p->fun[i] = fun;
-						p->funarg[i] = arg;
-						p->nfun++;
-						if (rv != ENOMEM) rv = 0;
+					p->fun = (intfun*)realloc(p->fun, newsize * sizeof(int));
+					if (p->fun)
+					{
+						p->funarg = (void**)realloc(p->funarg, newsize * sizeof(void*));
+						if (p->funarg) {
+							p->maxfun = newsize;
+							p->fun[i] = fun;
+							p->funarg[i] = arg;
+							p->nfun++;
+							if (rv != ENOMEM)
+							{
+								rv = 0;
+							}
+						}
+						else
+						{
+							rv = ENOMEM;
+						}
 					}
 					else
+					{
 						rv = ENOMEM;
+					}
 				}
-				else {
+				else
+				{
 					p->fun[i] = fun;
 					p->nfun++;
-					if (rv != ENOMEM) rv = 0;
+					if (rv != ENOMEM)
+					{
+						rv = 0;
+					}
 				}
 			}
 		}
@@ -47,7 +76,7 @@ int eventadd(int (*fun)(struct dbgcl*), char* path, void* arg) {
 int eventdel(int (*fun)(struct dbgcl*), char* path, void* arg) {
 	struct dbgcl* p;
 	int rv = EINVAL;
-	for (p = dbgclh; p != NULL; p = p->next) {
+	for (p = dbg_cl_header; p != NULL; p = p->next) {
 		if (strncmp(p->path, path, strlen(path)) == 0) {
 			int i;
 			if (rv == EINVAL) rv = ENOENT;

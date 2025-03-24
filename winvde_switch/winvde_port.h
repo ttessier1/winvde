@@ -98,3 +98,17 @@ void handle_in_packet(struct endpoint* ep, struct packet* packet, int len);
 void setup_description(struct endpoint* ep, char* descr);
 struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t user, struct mod_support* modfun);
 int checkport_ac(struct port* port, uint32_t user);
+#if !defined(VDE_PQ2)
+void send_packet_port(struct port* Port, unsigned short portno, char* packet, int len);
+#else
+void send_packet_port(struct port* Port, unsigned short portno, char* packet, int len, void** tmpBuff);
+#endif
+
+#ifdef VDE_PQ2
+ int defqlen(struct comparameter* parameter);
+ int epqlen(struct comparameter* parameter);
+int rec_setqlen_ep(struct endpoint* ep, SOCKET fd_ctl, int len);
+int setqlen_ep_port_fd(uint16_t portno, SOCKET fd_ctl, int len);
+int trysendfun(struct endpoint* ep, void* packet, int len);
+void handle_out_packet(struct endpoint* ep);
+#endif
