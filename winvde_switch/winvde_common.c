@@ -56,7 +56,7 @@ char* winvde_realpath(const char* name, char* resolved)
 	resolved_limit = resolved_ptr + MAX_PATH;
 
 	/* relative path, the first char is not '\\' */
-	if (name[0] != '\\')
+	if (!strstr(name, "C:\\") && !strstr(name,"\\"))
 	{
 		if (!_getcwd(resolved, MAX_PATH))
 		{

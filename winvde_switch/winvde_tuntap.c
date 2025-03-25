@@ -249,7 +249,7 @@ int parseopt(const int c, const char* optarg)
 	return outc;
 }
 
-void init(void)
+int init()
 {
 	struct inittuntap* p = NULL;
 	if (hinit_tap != NULL)
@@ -271,6 +271,7 @@ void init(void)
 			hinit_tap = free_init_tap(hinit_tap);
 		}
 	}
+	return 0;
 }
 
 void handle_io(unsigned char type, SOCKET fd, int revents, void* private_data)
@@ -390,7 +391,7 @@ struct endpoint* newtap(char* dev)
 		ep = setup_ep(0, tap_fd, tap_fd, -1, &module_functions);
 		if (ep != NULL) {
 			setup_description(ep, dev);
-			add_fd(tap_fd, tap_type, ep);
+			add_fd(tap_fd, tap_type, module.module_tag, ep);
 		}
 		return ep;
 	/* }

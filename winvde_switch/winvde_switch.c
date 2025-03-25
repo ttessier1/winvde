@@ -120,17 +120,20 @@ int main(const int argc, const char ** argv)
 
     fprintf(stdout, "Port Init\n");
 
-    init_mods();
+    if (init_mods() == 0)
+    {
+        fprintf(stdout, "Mods Init\n");
 
-    fprintf(stdout, "Mods Init\n");
+        loadrcfile();
 
-    loadrcfile();
+        fprintf(stdout, "Load RcFile\n");
+
+        main_loop();
+
+        fprintf(stdout, "Main Loop\n");
+    }
+
     
-    fprintf(stdout, "Load RcFile\n");
-    
-    main_loop();
-
-    fprintf(stdout, "Main Loop\n");
 
     WSACleanup();
   
@@ -581,77 +584,77 @@ void main_loop()
 {
     time_t now;
     int error_count = 0;
-    int n, index;
-    MSG msg;
+    int n=0;
+    uint32_t index = 0;
+    MSG msg; 
+    int sel = 0;
+    
     fd_set read_fds;
+    fd_set write_fds;
+    fd_set exception_fds;
+
     int result = 0;
+    
+    FD_ZERO(&read_fds);
+    FD_ZERO(&write_fds);
+    FD_ZERO(&exception_fds);
+
     while (1) {
-        n = WSAPoll(fds,number_of_filedescriptors, 0);
-        now = qtime();
-        if (n < 0) {
-            if (errno != EINTR)
+        for (index = 0; index < number_of_filedescriptors; index++)
+        {
+            if (fds[index].fd != 0 && fds[index].fd != INVALID_SOCKET)
             {
-                /*FD_ZERO(&read_fds);
-                FD_SET(STD_INPUT_HANDLE, &read_fds);
-                result = select(1, &read_fds, NULL, NULL, NULL);
-                if (result == -1 && errno != EINTR)
-                {
-                    strerror_s(errorbuff, sizeof(errorbuff), errno);
-                    printlog(LOG_WARNING, "select error %s", errorbuff);
-                }
-                else if (result == -1 && errno == EINTR)
-                {
-
-                }
-                else
-                {
-                    if (FD_ISSET(STD_INPUT_HANDLE, &read_fds))
-                    {
-                        // We received somedata on console
-                        fprintf(stdout, "Data Received on console\n");
-                    }
-                }*/
-
-
-                strerror_s(errorbuff, sizeof(errorbuff), errno);
-                printlog(LOG_WARNING, "poll %s", errorbuff);
-                error_count++;
-                
+                FD_SET(fds[index].fd, &read_fds);
+                FD_SET(fds[index].fd, &write_fds);
+                FD_SET(fds[index].fd, &exception_fds);
             }
+        }
+        n = select(number_of_filedescriptors, &read_fds, &write_fds, &exception_fds,NULL);
+        if (sel < 0)
+        {
+            continue;
+        }
+        now = qtime();
+        for (index = 0; n>0; index++) {
+            if (FD_ISSET(fds[index].fd,&read_fds)) {
+                int prenfds = number_of_filedescriptors;
+                n--;
+                fdpp[index]->timestamp = now;
+                TYPE2MGR(fdpp[index]->index)->handle_io(fdpp[index]->type, fds[index].fd, POLLOUT, fdpp[index]->private_data);
+                if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
+                {
+                    break; /* PERFORMANCE it is faster returning to poll */
+                }
+            }
+            if (FD_ISSET(fds[index].fd, &write_fds)) {
+                int prenfds = number_of_filedescriptors;
+                n--;
+                fdpp[index]->timestamp = now;
+                TYPE2MGR(fdpp[index]->type)->handle_io(fdpp[index]->type, fds[index].fd, POLLIN, fdpp[index]->private_data);
+                if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
+                {
+                    break; /* PERFORMANCE it is faster returning to poll */
+                }
+            }
+            /* optimization: most used descriptors migrate to the head of the poll array */
+#ifdef OPTPOLL
             else
             {
-                error_count = 0;
-            }
-        }
-        else {
-            for (index = 0; /*i < number_of_filedescriptors &&*/ n > 0; index++) {
-                if (fds[index].revents != 0) {
-                    int prenfds = number_of_filedescriptors;
-                    n--;
-                    fdpp[index]->timestamp = now;
-                    TYPE2MGR(fdpp[index]->type).handle_io(fdpp[index]->type, fds[index].fd, fds[index].revents, fdpp[index]->private_data);
-                    if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
-                        break; /* PERFORMANCE it is faster returning to poll */
-                }
-                /* optimization: most used descriptors migrate to the head of the poll array */
-#ifdef OPTPOLL
-                else
-                {
-                    if (i < number_of_filedescriptors && i > 0 && i != nprio) {
-                        int i_1 = i - 1;
-                        if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
-                            struct pollfd tfds;
-                            struct pollplus* tfdpp;
-                            tfds = fds[i]; fds[i] = fds[i_1]; fds[i_1] = tfds;
-                            tfdpp = fdpp[i]; fdpp[i] = fdpp[i_1]; fdpp[i_1] = tfdpp;
-                            fdperm[fds[i].fd] = i;
-                            fdperm[fds[i_1].fd] = i_1;
-                        }
+                if (i < number_of_filedescriptors && i > 0 && i != nprio) {
+                    int i_1 = i - 1;
+                    if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
+                        struct pollfd tfds;
+                        struct pollplus* tfdpp;
+                        tfds = fds[i]; fds[i] = fds[i_1]; fds[i_1] = tfds;
+                        tfdpp = fdpp[i]; fdpp[i] = fdpp[i_1]; fdpp[i_1] = tfdpp;
+                        fdperm[fds[i].fd] = i;
+                        fdperm[fds[i_1].fd] = i_1;
                     }
                 }
-#endif
             }
+#endif
         }
+
         if (!GetMessage(&msg, NULL, 0, 0))
         {
             break;

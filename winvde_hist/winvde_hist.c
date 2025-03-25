@@ -135,13 +135,29 @@ char* vdehist_readln(SOCKET vdefd, char* linebuf, int size, struct vh_readln* vl
 {
 	int i;
 	char lastch = ' ';
-	struct pollfd wfd = { vdefd,POLLIN | POLLHUP,0 };
+	int sel = 0;
+	fd_set read_fds;
+	fd_set write_fds;
+	fd_set exception_fds;
+
+	FD_ZERO(&read_fds);
+	FD_ZERO(&write_fds);
+	FD_ZERO(&exception_fds);
 	i = 0;
 	do
 	{
 		if (vlb->readbufindex == vlb->readbufsize)
 		{
-			WSAPoll(&wfd, 1, -1);
+			sel = select(1,&read_fds,&write_fds,&exception_fds,NULL);
+			if (sel < 0)
+			{
+				if (WSAGetLastError() == WSAEINPROGRESS)
+				{
+					continue;
+				}
+				fprintf(stderr, "Failed to do select on readlin: %d\n",WSAGetLastError());
+				break;
+			}
 			if ((vlb->readbufsize = recv(vdefd, vlb->readbuf, BUFSIZE,0)) <= 0)
 			{
 				return NULL;
@@ -159,9 +175,10 @@ char* vdehist_readln(SOCKET vdefd, char* linebuf, int size, struct vh_readln* vl
 	return linebuf;
 }
 
-void vdehist_create_commandlist(SOCKET vdefd)
+int vdehist_create_commandlist(SOCKET vdefd)
 {
 	int status = 0;
+	int readSomeData = 0;
 	char linebuf[BUFSIZE];
 	struct vh_readln readlnbuf = { 0,0 };
 	char* buf;
@@ -178,6 +195,7 @@ void vdehist_create_commandlist(SOCKET vdefd)
 		vdehist_vdewrite(vdefd, "help\n", 5,0);
 		while (status != CC_TERM && vdehist_readln(vdefd, linebuf, BUFSIZE, &readlnbuf) != NULL)
 		{
+			readSomeData = 1;
 			if (status == CC_HEADER)
 			{
 				if (strncmp(linebuf, "------------", 12) == 0)
@@ -217,6 +235,10 @@ void vdehist_create_commandlist(SOCKET vdefd)
 				}
 			}
 		}
+		if (readSomeData == 0)
+		{
+			return -1;
+		}
 		if (lastcommand)
 		{
 			write_memorystream(ms, (char*) & lastcommand, sizeof(char*));
@@ -234,6 +256,7 @@ void vdehist_create_commandlist(SOCKET vdefd)
 		close_memorystream(ms);
 		qsort(commandlist, (*bufsize / sizeof(char*)) - 1, sizeof(char*), qstrcmp);
 	}
+	return 0;
 }
 
 void erase_line(struct vdehiststat* st, int prompt_too)

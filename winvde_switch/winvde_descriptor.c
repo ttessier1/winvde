@@ -25,7 +25,7 @@ uint64_t fdpermsize = 0;
 
 uint32_t number_of_filedescriptors = 0;
 
-void add_fd(SOCKET fd, unsigned char type, void* private_data)
+void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* private_data)
 {
 	struct pollfd* p;
 	int index;
@@ -43,22 +43,27 @@ void add_fd(SOCKET fd, unsigned char type, void* private_data)
 			exit(1);
 		}
 	}
-	if (fd >= fdpermsize) {
+	if (fd >= fdpermsize)
+	{
 		fdpermsize = ((fd >> FDPERMSIZE_LOGSTEP) + 1) << FDPERMSIZE_LOGSTEP;
-		if ((fdperm = (short*)realloc(fdperm, fdpermsize * sizeof(short))) == NULL) {
+		if ((fdperm = (short*)realloc(fdperm, fdpermsize * sizeof(short))) == NULL)
+		{
 			strerror_s(errorbuff,sizeof(errorbuff),errno);
 			printlog(LOG_ERR, "realloc fdperm %s", errorbuff);
 			exit(1);
 		}
 	}
-	if (ISPRIO(type)) {
+	if (ISPRIO(type))
+	{
 		fds[number_of_filedescriptors] = fds[nprio];
 		fdpp[number_of_filedescriptors] = fdpp[nprio];
 		index = nprio;
 		nprio++;
 	}
 	else
+	{
 		index = number_of_filedescriptors;
+	}
 	if ((fdpp[index] = malloc(sizeof(struct pollplus))) == NULL) {
 		strerror_s(errorbuff, sizeof(errorbuff), errno);
 		printlog(LOG_ERR, "realloc pollplus elem %s", errorbuff);
@@ -68,6 +73,7 @@ void add_fd(SOCKET fd, unsigned char type, void* private_data)
 	p = &fds[index];
 	p->fd = fd;
 	p->events = POLLIN | POLLHUP;
+	fdpp[index]->index = module_index;
 	fdpp[index]->type = type;
 	fdpp[index]->private_data = private_data;
 	fdpp[index]->timestamp = 0;
@@ -86,7 +92,7 @@ void remove_fd(SOCKET fd)
 	}
 	else {
 		struct pollplus* old = fdpp[index];
-		TYPE2MGR(fdpp[index]->type).cleanup(fdpp[index]->type, fds[index].fd, fdpp[index]->private_data);
+		TYPE2MGR(fdpp[index]->index)->cleanup(fdpp[index]->type, fds[index].fd, fdpp[index]->private_data);
 		if (ISPRIO(fdpp[index]->type)) nprio--;
 		memmove(&fds[index], &fds[index + 1], (number_of_filedescriptors - index - 1) * sizeof(struct pollfd));
 		memmove(&fdpp[index], &fdpp[index + 1], (number_of_filedescriptors - index - 1) * sizeof(struct pollplus*));
@@ -104,10 +110,19 @@ void FileCleanUp()
 	struct winvde_module* module;
 	for (index = 0; index < number_of_filedescriptors; index++)
 	{
-		module = &TYPE2MGR(fdpp[index]->type);
+		module = TYPE2MGR(fdpp[index]->index);
 		if (module != NULL)
 		{
 			module->cleanup(fdpp[index]->type, fds[index].fd, fdpp[index]->private_data);
 		}
 	}
+}
+
+struct winvde_module* TYPE2MGR(char module_tag)
+{
+	struct winvde_module* ptr = winvde_modules;
+	while (ptr && ptr->module_tag != module_tag) {
+		ptr = ptr->next;
+	}
+	return ptr;
 }

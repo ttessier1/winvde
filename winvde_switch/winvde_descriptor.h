@@ -11,6 +11,7 @@ extern int maxfds;
 extern int nprio;
 
 struct pollplus {
+	unsigned char index;
 	unsigned char type;
 	void* private_data;
 	time_t timestamp;
@@ -26,10 +27,11 @@ extern uint64_t fdpermsize;
 
 #define TYPEMASK 0x7f
 
-#define TYPE2MGR(X) (winvde_modules[(X) & TYPEMASK])
+
 
 extern uint32_t number_of_filedescriptors;
 
-void add_fd(SOCKET fd, unsigned char type, void* private_data);
+void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* private_data);
 void remove_fd(SOCKET fd);
 void FileCleanUp();
+struct winvde_module* TYPE2MGR(char module_tag);

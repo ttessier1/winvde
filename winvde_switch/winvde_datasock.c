@@ -108,7 +108,7 @@ static struct mod_support module_functions;
 
 int datasock_showinfo(struct comparameter* parameter);
 void datasock_handle_io(unsigned char type, SOCKET fd, int revents, void* arg);
-void datasock_init(void);
+int datasock_init(void);
 void datasock_usage(void);
 int datasock_parse_options(const int c, const char* optarg);
 void datasock_cleanup(unsigned char type, SOCKET fd, void* arg);
@@ -162,7 +162,7 @@ int datasock_showinfo(struct comparameter * parameter)
 	return 0;
 }
 
-void datasock_init(void)
+int datasock_init(void)
 {
 	SOCKET connect_fd;
 	struct sockaddr_un sun;
@@ -190,7 +190,7 @@ void datasock_init(void)
 	{
 		strerror_s(errorbuff, sizeof(errorbuff), errno);
 		printlog(LOG_ERR, "Could not obtain a socket %s\n",errorbuff);
-		return;
+		return -1;
 	}
 	/*if (setsockopt(connect_fd, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof(one)) < 0)
 	{
@@ -202,7 +202,7 @@ void datasock_init(void)
 	{
 		strerror_s(errorbuff, sizeof(errorbuff), errno);
 		printlog(LOG_ERR, "Could not set non blocking mode on socket %s\n", errorbuff);
-		//return;
+		return -1;
 	}
 	if (rel_ctl_socket == NULL)
 	{
@@ -212,13 +212,13 @@ void datasock_init(void)
 	{
 		strerror_s(errorbuff, sizeof(errorbuff), errno);
 		fprintf(stderr, "Failed to make the directory: %s\n", errorbuff);
-		return;
+		return -1;
 	}
 	if (!winvde_realpath(rel_ctl_socket,ctl_socket))
 	{
 		strerror_s(errorbuff, sizeof(errorbuff), errno);
 		fprintf(stderr, "Can not resolve ctl dir path: '%s' %s\n", rel_ctl_socket, errorbuff);
-		return;
+		return -1;
 	}
 	fprintf(stdout, "Real Path of Socket: %s\n", ctl_socket);
 
@@ -263,8 +263,8 @@ void datasock_init(void)
 	ctl_type = add_type(&datasock_module, 0);
 	wd_type = add_type(&datasock_module, 0);
 	data_type = add_type(&datasock_module, 1);
-	add_fd(connect_fd, ctl_type, NULL);
-	return;
+	add_fd(connect_fd, ctl_type, datasock_module.module_tag,NULL);
+	return 0;
 }
 
 void datasock_usage(void)
@@ -432,7 +432,7 @@ void datasock_handle_io(unsigned char type, SOCKET fd, int revents, void* arg)
 		   return;
 		   }*/
 
-		add_fd(new, wd_type, NULL);
+		add_fd(new, wd_type, datasock_module.module_tag,NULL);
 	}
 }
 
@@ -568,7 +568,7 @@ struct endpoint* new_port_v1_v3(SOCKET fd_ctl, int type_port, struct sockaddr_un
 			return NULL;
 		}
 		portno = ep_get_port(ep);
-		add_fd(fd_data, data_type, ep);
+		add_fd(fd_data, data_type, datasock_module.module_tag, ep);
 		sun_in.sun_family = AF_UNIX;
 		if (strlen(ctl_socket) > max_ctl_sock_len)
 		{

@@ -50,7 +50,7 @@ void showexpand(char* linebuf, int bufindex, int termfd);
 int tabexpand(char* linebuf, int bufindex, int maxlength);
 int qstrcmp(const void* a, const void* b);
 char* vdehist_readln(SOCKET vdefd, char* linebuf, int size, struct vh_readln* vlb);
-void vdehist_create_commandlist(SOCKET vdefd);
+int vdehist_create_commandlist(SOCKET vdefd);
 void erase_line(struct vdehiststat* st, int prompt_too);
 void redraw_line(struct vdehiststat* st, int prompt_too);
 void vdehist_mgmt_to_term(struct vdehiststat* st);

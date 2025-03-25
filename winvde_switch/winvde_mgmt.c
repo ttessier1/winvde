@@ -125,7 +125,7 @@ char* mgmt_socket = NULL;
 // private function declarations
 void mgmt_usage();
 int mgmt_parse_options(const int c, const char* optarg);
-void mgmt_init(void);
+int mgmt_init();
 void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data);
 void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data);
 int handle_cmd(int type, SOCKET fd, char* inbuf);
@@ -211,7 +211,7 @@ int mgmt_parse_options(const int c, const char* optarg)
 
 }
 
-void mgmt_init(void)
+int mgmt_init()
 {
 	if (DoDaemonize) {
 		//openlog(basename(prog), LOG_PID, 0);
@@ -224,7 +224,7 @@ void mgmt_init(void)
 	if (!DoDaemonize && !DoNoStdIn)
 	{
 		console_type = add_type(&mgmgt_module, 0);
-		//add_fd(0, console_type, NULL);
+		add_fd(0, console_type, mgmgt_module.module_tag, NULL);
 		/* This file descriptor is a problem for WSAPoll*/
 	}
 
@@ -259,7 +259,7 @@ void mgmt_init(void)
 		if ((mgmtconnfd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printlog(LOG_ERR, "mgmt socket: %s", errorbuff);
-			return;
+			return -1;
 		}
 		
 		/*if (setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof(one)) < 0) {
@@ -271,16 +271,19 @@ void mgmt_init(void)
 		{
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printlog(LOG_ERR, "Setting O_NONBLOCK on mgmt fd: %s", errorbuff);
-			//return;
+			return -1;
 		}
 		sun.sun_family = PF_UNIX;
 		snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", mgmt_socket);
 		if (bind(mgmtconnfd, (struct sockaddr*)&sun, sizeof(sun)) < 0) {
-			if ((errno == EADDRINUSE) && still_used(&sun)) return;
+			if ((errno == EADDRINUSE) && still_used(&sun))
+			{
+				return -1;
+			}
 			else if (bind(mgmtconnfd, (struct sockaddr*)&sun, sizeof(sun)) < 0) {
 				strerror_s(errorbuff, sizeof(errorbuff), errno);
 				printlog(LOG_ERR, "mgmt bind %s", errorbuff);
-				return;
+				return -1;
 			}
 		}
 		// Do not set permissions
@@ -288,18 +291,18 @@ void mgmt_init(void)
 		if (listen(mgmtconnfd, 15) < 0) {
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printlog(LOG_ERR, "mgmt listen: %s", errorbuff);
-			return;
+			return -1;
 		}
 		mgmt_ctl = add_type(&mgmgt_module, 0);
 		mgmt_data = add_type(&mgmgt_module, 0);
-		add_fd(mgmtconnfd, mgmt_ctl, NULL);
+		add_fd(mgmtconnfd, mgmt_ctl, mgmgt_module.module_tag, NULL);
 	}
 	else
 	{
 		fprintf(stdout, "WARNING: Skipping management socket\n");
-		return;
+		return -1;
 	}
-
+	return 0;
 }
 
 void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data)
@@ -307,7 +310,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 	char buf[MAXCMD];
 	int n = 0;
 	int cmdout = 0;
-	struct sockaddr addr;
+	struct sockaddr_un addr;
 	int one = 1;
 	SOCKET new = INVALID_SOCKET;
 	struct comparameter parameter = { 0 };
@@ -397,7 +400,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 			return;
 		}
 
-		add_fd(new, mgmt_data, NULL);
+		add_fd(new, mgmt_data, mgmgt_module.module_tag, NULL);
 		EVENTOUT(MGMTPORTNEW, new);
 		snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
 		send(new, buf, (int)strlen(buf),0);
@@ -419,7 +422,7 @@ void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
 	else
 	{
 		closesocket(fd);
-		if (type == mgmt_ctl && mgmt_socket != NULL) {
+		if (type == mgmt_ctl && mgmt_socket != NULL || mgmt_ctl==0xFFFFFFFF && mgmt_socket != NULL) {
 			_unlink(mgmt_socket);
 		}
 	}
@@ -829,7 +832,7 @@ void mgmtnewfd(SOCKET new)
 		return;
 	}
 
-	add_fd(new, mgmt_data, NULL);
+	add_fd(new, mgmt_data, mgmgt_module.module_tag, NULL);
 	EVENTOUT(MGMTPORTNEW, new);
 	snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
 	send(new, buf, (int)strlen(buf),0);
