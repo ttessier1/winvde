@@ -45,7 +45,7 @@ struct port {
 	struct endpoint* ep;
 	int flag;
 	/* sender is already inside ms, but it needs one more memaccess */
-	int (*sender)(SOCKET fd_ctl, SOCKET fd_data, void* packet, int len, int port);
+	int (*sender)(SOCKET fd_ctl, SOCKET fd_data, void* packet, int len, uint16_t port);
 	struct mod_support* ms;
 	int vlanuntag;
 	uint32_t user;
@@ -96,7 +96,7 @@ int close_ep(struct endpoint* ep);
 int ep_get_port(struct endpoint* ep);
 void handle_in_packet(struct endpoint* ep, struct packet* packet, int len);
 void setup_description(struct endpoint* ep, char* descr);
-struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t user, struct mod_support* modfun);
+struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t user, struct mod_support* module_functions);
 int checkport_ac(struct port* port, uint32_t user);
 #if !defined(VDE_PQ2)
 void send_packet_port(struct port* Port, unsigned short portno, char* packet, int len);

@@ -224,7 +224,8 @@ void mgmt_init(void)
 	if (!DoDaemonize && !DoNoStdIn)
 	{
 		console_type = add_type(&mgmgt_module, 0);
-		add_fd(0, console_type, NULL);
+		//add_fd(0, console_type, NULL);
+		/* This file descriptor is a problem for WSAPoll*/
 	}
 
 	/* saves current path in pidfile_path, because otherwise with daemonize() we

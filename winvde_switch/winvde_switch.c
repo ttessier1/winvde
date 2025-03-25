@@ -28,6 +28,8 @@
 
 // add libraries
 #pragma comment (lib,"ws2_32.lib")
+#pragma comment(lib, "ntdll.lib")
+#pragma comment(lib,"Iphlpapi.lib")
 
 
 
@@ -278,9 +280,11 @@ void sig_handler(int sig)
 
 void StartModules()
 {
-    StartConsMgmt();
     StartDataSock();
+    StartConsMgmt();
+#if defined(HAVE_TUNTAP)
     StartTunTap();
+#endif
 }
 
 void CleanUp(void)
@@ -578,19 +582,41 @@ void main_loop()
     time_t now;
     int error_count = 0;
     int n, index;
+    MSG msg;
+    fd_set read_fds;
+    int result = 0;
     while (1) {
         n = WSAPoll(fds,number_of_filedescriptors, 0);
         now = qtime();
         if (n < 0) {
             if (errno != EINTR)
             {
+                /*FD_ZERO(&read_fds);
+                FD_SET(STD_INPUT_HANDLE, &read_fds);
+                result = select(1, &read_fds, NULL, NULL, NULL);
+                if (result == -1 && errno != EINTR)
+                {
+                    strerror_s(errorbuff, sizeof(errorbuff), errno);
+                    printlog(LOG_WARNING, "select error %s", errorbuff);
+                }
+                else if (result == -1 && errno == EINTR)
+                {
+
+                }
+                else
+                {
+                    if (FD_ISSET(STD_INPUT_HANDLE, &read_fds))
+                    {
+                        // We received somedata on console
+                        fprintf(stdout, "Data Received on console\n");
+                    }
+                }*/
+
+
                 strerror_s(errorbuff, sizeof(errorbuff), errno);
                 printlog(LOG_WARNING, "poll %s", errorbuff);
                 error_count++;
-                if (error_count > 3)
-                {
-                    break;
-                }
+                
             }
             else
             {
@@ -626,6 +652,12 @@ void main_loop()
 #endif
             }
         }
+        if (!GetMessage(&msg, NULL, 0, 0))
+        {
+            break;
+        }
+        DispatchMessage(&msg);
+        TranslateMessage(&msg);
     }
 }
 

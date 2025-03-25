@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -73,6 +73,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>C:\Users\fliei\kathara\WinNetworkPlugin\ext-src\winvde\wintun\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -162,6 +165,7 @@
     <ClCompile Include="winvde_qtimer.c" />
     <ClCompile Include="winvde_sockutils.c" />
     <ClCompile Include="winvde_switch.c" />
+    <ClCompile Include="winvde_tuntap.c" />
     <ClCompile Include="winvde_type.c" />
     <ClCompile Include="winvde_user.c" />
   </ItemGroup>
@@ -191,6 +195,7 @@
     <ClInclude Include="winvde_qtimer.h" />
     <ClInclude Include="winvde_sockutils.h" />
     <ClInclude Include="winvde_switch.h" />
+    <ClInclude Include="winvde_tuntap.h" />
     <ClInclude Include="winvde_type.h" />
     <ClInclude Include="winvde_user.h" />
   </ItemGroup>

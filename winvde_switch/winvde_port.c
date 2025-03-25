@@ -107,6 +107,9 @@ bitarray validvlan;
 
 
 struct port** portv;
+
+struct mod_support module_functions;
+
 /*
 int port_showinfo(FILE* fd);
 int portsetnumports(int val);
@@ -186,6 +189,7 @@ void port_init(int init_num_ports)
 		exit(1);
 	}
 	ADDCL(cl);
+
 #if defined(DEBUGOPT)
 	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
 #endif
@@ -1648,7 +1652,7 @@ void setup_description(struct endpoint* ep, char* descr)
 }
 
 /* initialize a new endpoint */
-struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t user, struct mod_support* modfun)
+struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t user, struct mod_support* module_functions)
 {
 	struct port* port;
 	struct endpoint* ep;
@@ -1668,8 +1672,8 @@ struct endpoint* setup_ep(int portno, SOCKET fd_ctl, SOCKET fd_data, uint32_t us
 		{
 			//DBGOUT(DBGEPNEW, "Port %02d FD %2d", portno, fd_ctl);
 			EVENTOUT(DBGEPNEW, portno, fd_ctl);
-			port->ms = modfun;
-			port->sender = modfun->sender;
+			port->ms = module_functions;
+			port->sender = module_functions->sender;
 			ep->port = portno;
 			ep->fd_ctl = fd_ctl;
 			ep->fd_data = fd_data;
@@ -1907,3 +1911,4 @@ void handle_out_packet(struct endpoint* ep)
 	}
 }
 #endif
+

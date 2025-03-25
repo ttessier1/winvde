@@ -102,7 +102,7 @@ int dirmode = -1;
 
 struct winvde_module datasock_module;
 
-static struct mod_support modfun;
+static struct mod_support module_functions;
 
 // function declarations
 
@@ -112,6 +112,8 @@ void datasock_init(void);
 void datasock_usage(void);
 int datasock_parse_options(const int c, const char* optarg);
 void datasock_cleanup(unsigned char type, SOCKET fd, void* arg);
+void delep(SOCKET fd_ctl, SOCKET fd_data, void* descr);
+int send_datasock(SOCKET fd_ctl, SOCKET fd_data, void* packet, int len, uint16_t port);
 
 static struct comlist cl[] = {
 	{"ds","============","DATA SOCKET MENU",NULL,NOARG},
@@ -129,6 +131,11 @@ void StartDataSock(void)
 	datasock_module.init = datasock_init;
 	datasock_module.handle_io = datasock_handle_io;
 	datasock_module.cleanup = datasock_cleanup;
+	module_functions.modname = "datasock";
+	module_functions.sender = send_datasock;
+	module_functions.delep = delep;
+
+
 	ADDCL(cl);
 	add_module(&datasock_module);
 }
@@ -435,7 +442,7 @@ void datasock_cleanup(unsigned char type, SOCKET fd, void* arg)
 	struct sockaddr_un clun;
 	SOCKET test_fd;
 
-	if (fd != INVALID_SOCKET){
+	if (fd == INVALID_SOCKET){
 		const size_t max_ctl_sock_len = sizeof(clun.sun_path) - 5;
 		if (!strlen(ctl_socket)) {
 			return;
@@ -449,7 +456,7 @@ void datasock_cleanup(unsigned char type, SOCKET fd, void* arg)
 		{
 			ctl_socket[max_ctl_sock_len] = 0;
 		}
-		snprintf(clun.sun_path, sizeof(clun.sun_path), "%s/ctl", ctl_socket);
+		snprintf(clun.sun_path, sizeof(clun.sun_path), "%s\\ctl.sock", ctl_socket);
 		if (connect(test_fd, (struct sockaddr*)&clun, sizeof(clun)))
 		{
 			closesocket(test_fd);
@@ -555,7 +562,7 @@ struct endpoint* new_port_v1_v3(SOCKET fd_ctl, int type_port, struct sockaddr_un
 			return NULL;
 		}
 
-		ep = setup_ep(port_request, fd_ctl, fd_data, user, &modfun);
+		ep = setup_ep(port_request, fd_ctl, fd_data, user, &module_functions);
 		if (ep == NULL)
 		{
 			return NULL;
@@ -614,4 +621,37 @@ struct endpoint* new_port_v1_v3(SOCKET fd_ctl, int type_port, struct sockaddr_un
 		remove_fd(fd_ctl);
 		return NULL;
 	}
+}
+
+int send_datasock(SOCKET fd_ctl, SOCKET fd_data, void* packet, int len, uint16_t port)
+{
+	int rv = 0;
+	while (send(fd_data, packet, len, 0) < 0)
+	{
+		rv = errno;
+#if defined(VDE_DARWIN) || defined(VDE_FREEBSD)
+		if (rv == ENOBUFS) {
+			sched_yield();
+			continue;
+		}
+#endif
+		if (rv != EAGAIN && rv != EWOULDBLOCK)
+		{
+			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			printlog(LOG_WARNING, "send_sockaddr port %d: %s", port, errorbuff);
+		}
+		else
+		{
+			rv = EWOULDBLOCK;
+		}
+		return -rv;
+	}
+	return 0;
+}
+
+void delep(SOCKET fd_ctl, SOCKET fd_data, void* descr)
+{
+	if (fd_data >= 0) remove_fd(fd_data);
+	if (fd_ctl >= 0) remove_fd(fd_ctl);
+	if (descr) free(descr);
 }

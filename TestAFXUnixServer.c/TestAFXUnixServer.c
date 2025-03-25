@@ -1,15 +1,25 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#define FD_SETSIZE 2
 #include <WinSock2.h>
 #include <afunix.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <io.h>
+#include <conio.h>
 #pragma comment (lib,"ws2_32.lib")
 
-#define SERVER_SOCKET "server.sock"
+#define SERVER_SOCKET "c:\\windows\\temp\\server.sock"
 #define message "Message From AFUNIX!"
+#define BUFFER_SIZE 1024
+char std_input_buffer[BUFFER_SIZE];
+int std_input_pos = 0;
+char errorbuff[BUFFER_SIZE];
+
+
+
+DWORD APIENTRY ClientThread(LPVOID parameter);
 
 int main()
 {
@@ -18,11 +28,13 @@ int main()
     SOCKET serverSock = INVALID_SOCKET;
     SOCKET clientSock = INVALID_SOCKET;
     SOCKADDR_UN sock_addr = { 0 };
-
+    DWORD one = 1;
+    DWORD dwThreadId = 0;
     char* buff = message;
     char* replyBuff = NULL;
     int replyBuffSize = 0;
     int rc=0;
+
 
     memset(&wsadata, 0, sizeof(WSADATA));
 
@@ -35,63 +47,60 @@ int main()
     serverSock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (serverSock != INVALID_SOCKET)
     {
+        
+
         sock_addr.sun_family = AF_UNIX;
-        strncpy_s(&sock_addr.sun_path, sizeof(sock_addr.sun_path), SERVER_SOCKET, (sizeof(SERVER_SOCKET) - 1));
+        strncpy_s((char*) & sock_addr.sun_path, sizeof(sock_addr.sun_path), SERVER_SOCKET, (sizeof(SERVER_SOCKET) - 1));
 
         rc = remove(SERVER_SOCKET);
         if (rc != 0)
         {
-            rc = WSAGetLastError();
+            rc = GetLastError();
             if (rc != ENOENT) {
                 fprintf(stderr,"remove() error: %d\n", rc);
                 goto CleanUp;
             }
         }
 
-        rc = bind(serverSock,(struct sockaddr*)&sock_addr,sizeof(SOCKADDR_UN));
+        rc = bind(serverSock, (struct sockaddr*)&sock_addr, sizeof(SOCKADDR_UN));
         if (rc == SOCKET_ERROR)
         {
-            fprintf("Failed to bind the socket: %d\n", WSAGetLastError());
+            fprintf(stderr,"Failed to bind the socket: %d\n", WSAGetLastError());
+
             goto CleanUp;
         }
         rc = listen(serverSock, SOMAXCONN);
         if (rc == SOCKET_ERROR)
         {
-            fprintf("Failed to listen the socket: %d\n", WSAGetLastError());
+            fprintf(stderr,"Failed to listen the socket: %d\n", WSAGetLastError());
             goto CleanUp;
         }
 
-        clientSock = accept(serverSock, NULL, NULL);
-        if(clientSock== INVALID_SOCKET)
+        if (ioctlsocket(serverSock, FIONBIO, &one) < 0)
         {
-            fprintf("Failed to accept the socket: %d\n", WSAGetLastError());
-            goto CleanUp;
+            fprintf(stderr, "Failed to set non-blocking: %d\n", WSAGetLastError());
         }
-        fprintf(stdout, "Accepted the connection\n");
-
-        rc = send(clientSock, (const char*)buff, strlen(buff), 0);
-        if(rc ==SOCKET_ERROR)
+        else
         {
-            printf("send() error: %d\n", WSAGetLastError());
-            goto CleanUp;
+            fprintf(stdout, "Socket is not non-blocking\n");
         }
 
-        fprintf(stdout, "Relayed: %d bytes\n",rc);
-        replyBuffSize = 1500;
-        replyBuff = (char*)malloc(replyBuffSize);
-        if (replyBuff)
+        while (1)
         {
-            rc = recv(clientSock, replyBuff, replyBuffSize, 0);
-            if (rc != SOCKET_ERROR)
+            errno = 0;
+            clientSock = accept(serverSock, NULL, NULL);
+            if (clientSock == INVALID_SOCKET && WSAGetLastError() != WSAEWOULDBLOCK)
             {
-                fprintf(stdout, "Received %d bytes:%.*s", rc,rc, replyBuff);
+                fprintf(stderr,"Failed to accept the socket: %d %d\n", errno, WSAGetLastError());
+                goto CleanUp;
             }
-            
-            free(replyBuff);
+            else if (clientSock != INVALID_SOCKET)
+            {
+                fprintf(stdout, "Accepted the connection\n");
+
+                CreateThread(NULL, 0, ClientThread, (LPVOID)clientSock, 0, &dwThreadId);
+            }
         }
-
-
-        
     }
     else
     {
@@ -99,14 +108,171 @@ int main()
     }
 
 CleanUp:
-    if (serverSock)
-    {
-        closesocket(serverSock);
-    }
-    if (clientSock)
-    {
-        closesocket(clientSock);
-    }
-    DeleteFileA(SERVER_SOCKET);
-    WSACleanup();
+if (serverSock)
+{
+    closesocket(serverSock);
 }
+if (clientSock)
+{
+    closesocket(clientSock);
+}
+DeleteFileA(SERVER_SOCKET);
+WSACleanup();
+}
+
+DWORD APIENTRY ClientThread(LPVOID parameter)
+{
+    enum server_state {
+        FirstPacket,
+        HelloSent,
+        Closing
+    };
+    SOCKET clientSocket = INVALID_SOCKET;
+    int state = FirstPacket;
+    char * buff = NULL;
+    char * out = NULL;
+
+    int buffer_ready = 0;
+
+    int bytesRead = 0;
+    int bytesWritten = 0;
+
+    fd_set read_fds;
+    fd_set write_fds;
+    fd_set exception_fds;
+
+    int sel = 0;
+    if (parameter)
+    {
+        clientSocket = (SOCKET)parameter;
+
+        FD_ZERO(&read_fds);
+        FD_ZERO(&write_fds);
+        FD_ZERO(&exception_fds);
+
+
+        buff = (char*)malloc(1500);
+        if (!buff)
+        {
+            errno = ENOMEM;
+            closesocket(clientSocket);
+            return -1;
+        }
+
+        
+        while (1)
+        {
+            FD_SET(clientSocket, &read_fds);
+            FD_SET(clientSocket, &write_fds);
+            FD_SET(clientSocket, &exception_fds);
+
+            sel = select(1, &read_fds, &write_fds, &exception_fds, NULL);
+
+            if (sel < 0)
+            {
+                continue;
+            }
+
+            if (FD_ISSET(clientSocket, &read_fds))
+            {
+
+                memset(buff, 0, sizeof(buff));
+
+                bytesRead = recv(clientSocket, buff, sizeof(buff), 0);
+
+                if (bytesRead < 0)
+                {
+                    fprintf(stderr, "Failed receive: %d\n", WSAGetLastError());
+                    goto CleanUp;
+                }
+                else if (bytesRead == 0)
+                {
+                    fprintf(stderr, "Connection Closed\n");
+                    goto CleanUp;
+                }
+                else
+                {
+                    if (memcmp(buff, "quit",min(bytesRead,strlen("quit"))) == 0)
+                    {
+                        fprintf(stdout, "Received quit message\n");
+                        goto CleanUp;
+                    }
+                    fprintf(stdout, "Client Write: %d bytes %.*s\n", bytesRead, bytesRead, buff);
+                }
+            }
+
+            if (_kbhit())
+            {
+
+                std_input_buffer[std_input_pos] = _getche();
+                if (std_input_buffer[std_input_pos] == '\n' || std_input_buffer[std_input_pos] == '\r')
+                {
+
+                    buffer_ready = 1;
+                }
+                else if (std_input_pos >= BUFFER_SIZE - 1)
+                {
+                    buffer_ready = 1;
+                }
+                else
+                {
+
+                    std_input_pos++;
+                }
+
+            }
+
+           
+            if (FD_ISSET(clientSocket,&write_fds) &&buffer_ready==1 || 
+                FD_ISSET(clientSocket, &write_fds)  && state==FirstPacket
+            )
+            {
+                if (state == FirstPacket)
+                {
+                    send(clientSocket, (char*)"Hello", (int)strlen("Hello"), 0);
+                    state = HelloSent;
+                }
+                else
+                {
+                    out = (char*)malloc(std_input_pos+1);
+                    if (!out)
+                    {
+                        fprintf(stderr, "Failed to allocate memory for buffer\n");
+                        goto CleanUp;
+                    }
+                    memcpy(out, std_input_buffer, std_input_pos);
+                    send(clientSocket, out, std_input_pos, 0);
+                    bytesWritten = 0;
+                    buffer_ready = 0;
+                    std_input_pos = 0;
+                    if(out)
+                    {
+                        free(out);
+                        out = NULL;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        fprintf(stderr, "Failed to get socket from thread parameter\n");
+    }
+CleanUp:
+    if (out)
+    {
+        free(out);
+        out = NULL;
+    }
+    if (buff)
+    {
+        free(buff);
+        buff = NULL;
+    }
+    if (clientSocket != INVALID_SOCKET)
+    {
+        closesocket(clientSocket);
+    }
+    return 0;
+}
+
