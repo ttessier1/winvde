@@ -27,25 +27,19 @@ int main()
     WSADATA wsadata;
     SOCKET serverSocket = INVALID_SOCKET;
     SOCKADDR_UN sock_addr;
+
+    LPWSAPOLLFD wsaPollFD = NULL;
+
     int rc = 0;
     char recvBuffer[recvBufferSize];
     char* buff = (char*)MESSAGE;
 
     fpos_t std_in_pos = 0;
     fpos_t std_last_in_pos = 0;
-
-    fd_set read_fds;
-    fd_set write_fds;
-    fd_set exception_fds;
     
     DWORD one = 1;
     DWORD buffer_ready = 0;
     int sel = 0;
-
-    WSAPOLLFD wsaPollFD[2] = {
-       {serverSocket,POLLIN,0},
-       {serverSocket,POLLOUT,0},
-    };
 
     memset(&wsadata, 0, sizeof(WSADATA));
 
@@ -77,20 +71,31 @@ int main()
         goto CleanUp;
     }
 
+    wsaPollFD = (LPWSAPOLLFD)malloc(sizeof(WSAPOLLFD)*2);
+    
+    if (!wsaPollFD)
+    {
+        fprintf(stderr, "Failed to allocate memory for PollFD\n");
+        goto CleanUp;
+    }
+
     wsaPollFD[0].fd = serverSocket;
+    wsaPollFD[0].events = POLLIN ;
+    wsaPollFD[0].revents = 0;
     wsaPollFD[1].fd = serverSocket;
+    wsaPollFD[1].events = POLLOUT ;
+    wsaPollFD[1].revents = 0;
 
    
     while (1)
     {
-        sel = WSAPoll((LPWSAPOLLFD) & wsaPollFD, 2, 0);
-
+        sel = WSAPoll(wsaPollFD, 2, 0);
         if (sel < 0)
         {
-            fprintf(stderr, "Failed to poll for sockets: %d\n", WSAGetLastError());
-            continue;
+            fprintf(stderr, "Failed to WSAPoll:%d\n",WSAGetLastError());
+            break;
         }
-        if(wsaPollFD[0].revents & POLLIN)
+        if (wsaPollFD[0].revents & POLLIN)
         {
             rc = recv(wsaPollFD[0].fd, recvBuffer, recvBufferSize, 0);
             if (rc < 0)
@@ -130,6 +135,11 @@ int main()
                     goto CleanUp;
                 }
             }
+        }
+        if(wsaPollFD[0].revents&POLLHUP)
+        {
+            fprintf(stderr, "HangUp\n");
+            goto CleanUp;
         }
         if (_kbhit())
         {

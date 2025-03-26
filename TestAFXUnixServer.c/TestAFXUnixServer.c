@@ -21,6 +21,8 @@ char errorbuff[BUFFER_SIZE];
 
 DWORD APIENTRY ClientThread(LPVOID parameter);
 
+DWORD keepRunning = 1;
+
 int main()
 {
     WSADATA wsadata;
@@ -30,6 +32,7 @@ int main()
     SOCKADDR_UN sock_addr = { 0 };
     DWORD one = 1;
     DWORD dwThreadId = 0;
+    
     char* buff = message;
     char* replyBuff = NULL;
     int replyBuffSize = 0;
@@ -85,7 +88,7 @@ int main()
             fprintf(stdout, "Socket is not non-blocking\n");
         }
 
-        while (1)
+        while (keepRunning==1)
         {
             errno = 0;
             clientSock = accept(serverSock, NULL, NULL);
@@ -128,11 +131,7 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
         Closing
     };
     SOCKET clientSocket = INVALID_SOCKET;
-
-    WSAPOLLFD wsaPollFD[2] = {
-        {clientSocket,POLLIN,0},
-        {clientSocket,POLLOUT,0},
-    };
+    LPWSAPOLLFD wsaPollFD =NULL;
     int state = FirstPacket;
     char * buff = NULL;
     char * out = NULL;
@@ -142,18 +141,29 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
     int bytesRead = 0;
     int bytesWritten = 0;
 
-    fd_set read_fds;
-    fd_set write_fds;
-    fd_set exception_fds;
+    
 
     int sel = 0;
     if (parameter)
     {
         clientSocket = (SOCKET)parameter;
-
+        if (clientSocket == INVALID_SOCKET)
+        {
+            fprintf(stderr, "Invalid Socket sent to thread\n");
+            goto CleanUp;
+        }
+        wsaPollFD = (WSAPOLLFD*)malloc(sizeof(WSAPOLLFD) * 2);
+        if (!wsaPollFD)
+        {
+            fprintf(stderr, "Failed to allocate memory for PollFD\n");
+            goto CleanUp;
+        }
         wsaPollFD[0].fd = clientSocket;
+        wsaPollFD[0].events = POLLIN ;
+        wsaPollFD[0].revents = 0;
         wsaPollFD[1].fd = clientSocket;
-
+        wsaPollFD[1].events = POLLOUT;
+        wsaPollFD[1].revents = 0;
 
         buff = (char*)malloc(1500);
         if (!buff)
@@ -167,15 +177,15 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
         while (1)
         {
 
-            sel = WSAPoll((LPWSAPOLLFD) &wsaPollFD, 2, 0);
+            sel = WSAPoll(wsaPollFD, 2, 0);
 
             if (sel < 0)
             {
-                fprintf(stderr, "Failed to WSAPoll: %d\n", WSAGetLastError());
-                continue;
+                fprintf(stderr, "Failed to WsaPoll: %d\n",WSAGetLastError());
+                goto CleanUp;
             }
 
-            if (wsaPollFD[0].revents & POLLIN)
+            if (wsaPollFD[0].revents&POLLIN)
             {
 
                 memset(buff, 0, sizeof(buff));
@@ -199,10 +209,19 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
                         fprintf(stdout, "Received quit message\n");
                         goto CleanUp;
                     }
+                    if (memcmp(buff, "exit", min(bytesRead, strlen("quit"))) == 0)
+                    {
+                        fprintf(stdout, "Received exit message\n");
+                        goto CleanUp;
+                    }
                     fprintf(stdout, "Client Write: %d bytes %.*s\n", bytesRead, bytesRead, buff);
                 }
             }
-
+            if (wsaPollFD[0].revents & POLLHUP)
+            {
+                fprintf(stderr, "Remote Hangup\n");
+                break;
+            }
             if (_kbhit())
             {
 
@@ -223,10 +242,8 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
                 }
 
             }
-
-           
-            if ((wsaPollFD[1].revents & POLLOUT) &&buffer_ready==1 ||
-                (wsaPollFD[1].revents & POLLOUT) && state==FirstPacket
+            if (wsaPollFD[1].revents & POLLOUT &&buffer_ready==1 ||
+                wsaPollFD[1].revents & POLLOUT && state==FirstPacket
             )
             {
                 if (state == FirstPacket)
@@ -243,10 +260,10 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
                         goto CleanUp;
                     }
                     memcpy(out, std_input_buffer, std_input_pos);
-                    if (memcmp(std_input_buffer, "exit", min(std_input_pos,strlen("exit"))))
+
+                    if (memcmp(std_input_buffer, "exit", min(std_input_pos, strlen("exit")))==0)
                     {
                         send(clientSocket, out, std_input_pos, 0);
-
                         bytesWritten = 0;
                         buffer_ready = 0;
                         std_input_pos = 0;
@@ -255,6 +272,8 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
                             free(out);
                             out = NULL;
                         }
+
+                        keepRunning = 0;
                         break;
                     }
                     send(clientSocket, out, std_input_pos, 0);
@@ -268,6 +287,11 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
                         out = NULL;
                     }
                 }
+            }
+            if (wsaPollFD[1].revents & POLLHUP)
+            {
+                fprintf(stderr, "Remote Hangup\n");
+                break;
             }
         }
     }

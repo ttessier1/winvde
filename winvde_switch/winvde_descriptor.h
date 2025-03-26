@@ -12,6 +12,7 @@ extern int nprio;
 
 struct pollplus {
 	unsigned char index;
+	SOCKET fd;
 	unsigned char type;
 	void* private_data;
 	time_t timestamp;

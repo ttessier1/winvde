@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <signal.h>
+#include <conio.h>
 
 // custom includes
 #include "winvde_mgmt.h"
@@ -47,6 +48,9 @@ const char* prog;
 
 static uint64_t xrand48 = 0;
 static uint64_t xx = 0;
+#define BUFFER_SIZE 1024
+char std_input_buffer[BUFFER_SIZE];
+int std_input_pos = 0;
 
 // function declarations
 void srand48(uint64_t seed);
@@ -132,11 +136,7 @@ int main(const int argc, const char ** argv)
 
         fprintf(stdout, "Main Loop\n");
     }
-
-    
-
     WSACleanup();
-  
 }
 
 #endif
@@ -586,75 +586,147 @@ void main_loop()
     int error_count = 0;
     int n=0;
     uint32_t index = 0;
+    uint32_t fd_index = 0;
+    uint32_t pollable_count = 0;
+    int fd_found = 0;
     MSG msg; 
-    int sel = 0;
-    
-    fd_set read_fds;
-    fd_set write_fds;
-    fd_set exception_fds;
-
+    int prenfds = 0;
     int result = 0;
+
+    fpos_t std_in_pos = 0;
+    fpos_t std_last_in_pos = 0;
+    DWORD buffer_ready = 0;
+
+    struct pollfd* pollable_fds = NULL;
+
     
-    FD_ZERO(&read_fds);
-    FD_ZERO(&write_fds);
-    FD_ZERO(&exception_fds);
 
     while (1) {
-        for (index = 0; index < number_of_filedescriptors; index++)
+        if (pollable_fds)
         {
-            if (fds[index].fd != 0 && fds[index].fd != INVALID_SOCKET)
+            errno = 0;
+            if (pollable_count != number_of_filedescriptors)
             {
-                FD_SET(fds[index].fd, &read_fds);
-                FD_SET(fds[index].fd, &write_fds);
-                FD_SET(fds[index].fd, &exception_fds);
-            }
-        }
-        n = select(number_of_filedescriptors, &read_fds, &write_fds, &exception_fds,NULL);
-        if (sel < 0)
-        {
-            continue;
-        }
-        now = qtime();
-        for (index = 0; n>0; index++) {
-            if (FD_ISSET(fds[index].fd,&read_fds)) {
-                int prenfds = number_of_filedescriptors;
-                n--;
-                fdpp[index]->timestamp = now;
-                TYPE2MGR(fdpp[index]->index)->handle_io(fdpp[index]->type, fds[index].fd, POLLIN, fdpp[index]->private_data);
-                if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
+                free(pollable_fds);
+                for (index = 0; index < number_of_filedescriptors; index++)
                 {
-                    break; /* PERFORMANCE it is faster returning to poll */
+                    if (fds[index].fd != 0 && fds[index].fd != INVALID_SOCKET)
+                    {
+                        pollable_count++;
+                    }
+                }
+                pollable_fds = (struct pollfd*)malloc(sizeof(struct pollfd) * pollable_count);
+                if (pollable_fds)
+                {
+                    pollable_count = 0;
+                    for (index = 0; index < number_of_filedescriptors; index++)
+                    {
+                        if (fds[index].fd != 0 && fds[index].fd != INVALID_SOCKET)
+                        {
+                            pollable_fds[pollable_count].fd = fds[index].fd;
+                            pollable_fds[pollable_count].events = fds[index].events;
+                            pollable_fds[pollable_count].revents = fds[index].revents;
+                            pollable_count++;
+                        }
+                    }
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to get memory for file descriptors\n");
+                    break;
                 }
             }
-            if (FD_ISSET(fds[index].fd, &write_fds)) {
-                int prenfds = number_of_filedescriptors;
-                n--;
-                fdpp[index]->timestamp = now;
-                TYPE2MGR(fdpp[index]->type)->handle_io(fdpp[index]->type, fds[index].fd, POLLOUT, fdpp[index]->private_data);
-                if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
+            n = WSAPoll(pollable_fds, pollable_count, 0);
+            if (n < 0)
+            {
+                if (errno != EINTR && errno != 0)
                 {
-                    break; /* PERFORMANCE it is faster returning to poll */
+                    strerror_s(errorbuff, sizeof(errorbuff), errno);
+                    printlog(LOG_WARNING, "poll %s %d", errorbuff, WSAGetLastError());
                 }
             }
-            /* optimization: most used descriptors migrate to the head of the poll array */
-#ifdef OPTPOLL
             else
             {
-                if (i < number_of_filedescriptors && i > 0 && i != nprio) {
-                    int i_1 = i - 1;
-                    if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
-                        struct pollfd tfds;
-                        struct pollplus* tfdpp;
-                        tfds = fds[i]; fds[i] = fds[i_1]; fds[i_1] = tfds;
-                        tfdpp = fdpp[i]; fdpp[i] = fdpp[i_1]; fdpp[i_1] = tfdpp;
-                        fdperm[fds[i].fd] = i;
-                        fdperm[fds[i_1].fd] = i_1;
+                now = qtime();
+                for (index = 0; n > 0; index++) {
+                    fd_index = 0;
+                    fd_found = 0;
+                    while (1)
+                    {
+                        if (pollable_fds[index].fd == fdpp[fd_index]->fd)
+                        {
+                            fd_found = 1;
+                            break;
+                        }
+                        fd_index++;
+                        if (fd_index == number_of_filedescriptors)
+                        {
+                            break;
+                        }
+                    }
+                    if (fd_found == 1)
+                    {
+                        if (pollable_fds[index].revents != 0 && pollable_fds[index].fd != 0 && pollable_fds[index].fd != INVALID_SOCKET)
+                        {
+                            prenfds = number_of_filedescriptors;
+                            n--;
+                            fdpp[fd_index]->timestamp = now;
+                            TYPE2MGR(fdpp[fd_index]->index)->handle_io(fdpp[fd_index]->type, fds[fd_index].fd, fds[fd_index].revents, fdpp[fd_index]->private_data);
+                            if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
+                            {
+                                break; /* PERFORMANCE it is faster returning to poll */
+                            }
+                        }
+                        /* optimization: most used descriptors migrate to the head of the poll array */
+#ifdef OPTPOLL
+                        else
+                        {
+                            if (i < number_of_filedescriptors && i > 0 && i != nprio) {
+                                int i_1 = i - 1;
+                                if (fdpp[i]->timestamp > fdpp[i_1]->timestamp) {
+                                    struct pollfd tfds;
+                                    struct pollplus* tfdpp;
+                                    tfds = fds[i]; fds[i] = fds[i_1]; fds[i_1] = tfds;
+                                    tfdpp = fdpp[i]; fdpp[i] = fdpp[i_1]; fdpp[i_1] = tfdpp;
+                                    fdperm[fds[i].fd] = i;
+                                    fdperm[fds[i_1].fd] = i_1;
+                                }
+                            }
+                        }
+#endif
                     }
                 }
             }
-#endif
         }
-
+        if (_kbhit())
+        {
+            std_input_buffer[std_input_pos] = _getche();
+            if (std_input_buffer[std_input_pos] == '\n' || std_input_buffer[std_input_pos] == '\r')
+            {
+                buffer_ready = 1;
+            }
+            else if (std_input_pos >= BUFFER_SIZE - 1)
+            {
+                buffer_ready = 1;
+            }
+            else
+            {
+                std_input_pos++;
+            }
+        }
+        if (buffer_ready == 1)
+        {
+            if (std_input_pos > 0)
+            {
+                if (memcmp(std_input_buffer, "quit", min(std_input_pos, strlen("quit"))) == 0)
+                {
+                    break;
+                }
+            }
+            buffer_ready = 0;
+            std_input_pos = 0;
+        }
+        // required for qtimer to work
         if (!GetMessage(&msg, NULL, 0, 0))
         {
             break;
