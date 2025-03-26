@@ -148,6 +148,10 @@ char* vdehist_readln(SOCKET vdefd, char* linebuf, int size, struct vh_readln* vl
 	{
 		if (vlb->readbufindex == vlb->readbufsize)
 		{
+			FD_SET(vdefd, &read_fds);
+			FD_SET(vdefd, &write_fds);
+			FD_SET(vdefd, &exception_fds);
+
 			sel = select(1,&read_fds,&write_fds,&exception_fds,NULL);
 			if (sel < 0)
 			{
@@ -563,25 +567,24 @@ int telnet_options(struct vdehiststat* st, unsigned char* s)
 	return skip;
 }
 
-size_t vdehist_term_to_mgmt(struct vdehiststat* st)
+size_t vdehist_term_to_mgmt(struct vdehiststat* st,char * buf, int size)
 {
-	unsigned char buf[BUFSIZE];
-	size_t n;
+	//unsigned char buf[BUFSIZE];
 	int i = 0;
 	int rv = 0;
-	n = vdehist_termread(st->termfd, buf, BUFSIZE);
+	//n = vdehist_termread(st->termfd, buf, BUFSIZE);
 	//printf("termto mgmt N%d %x %x %x %x\n",n,buf[0],buf[1],buf[2],buf[3]);
-	if (n == 0)
+	if (!buf || size == 0)
 	{
 		return 1;
 	}
-	else if (n < 0)
+	else if (size < 0)
 	{
-		return n;
+		return size;
 	}
 	else
 	{
-		for (i = 0; i < n && strlength(st->linebuf) < BUFSIZE; i++)
+		for (i = 0; i < size && strlength(st->linebuf) < size; i++)
 		{
 			if (buf[i] == 0xff && buf[i + 1] == 0xff)
 			{

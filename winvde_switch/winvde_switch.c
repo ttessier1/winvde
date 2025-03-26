@@ -620,7 +620,7 @@ void main_loop()
                 int prenfds = number_of_filedescriptors;
                 n--;
                 fdpp[index]->timestamp = now;
-                TYPE2MGR(fdpp[index]->index)->handle_io(fdpp[index]->type, fds[index].fd, POLLOUT, fdpp[index]->private_data);
+                TYPE2MGR(fdpp[index]->index)->handle_io(fdpp[index]->type, fds[index].fd, POLLIN, fdpp[index]->private_data);
                 if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
                 {
                     break; /* PERFORMANCE it is faster returning to poll */
@@ -630,7 +630,7 @@ void main_loop()
                 int prenfds = number_of_filedescriptors;
                 n--;
                 fdpp[index]->timestamp = now;
-                TYPE2MGR(fdpp[index]->type)->handle_io(fdpp[index]->type, fds[index].fd, POLLIN, fdpp[index]->private_data);
+                TYPE2MGR(fdpp[index]->type)->handle_io(fdpp[index]->type, fds[index].fd, POLLOUT, fdpp[index]->private_data);
                 if (number_of_filedescriptors != prenfds) /* the current fd has been deleted */
                 {
                     break; /* PERFORMANCE it is faster returning to poll */

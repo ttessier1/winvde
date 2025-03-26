@@ -88,7 +88,7 @@ int main(const int argc, const char** argv)
 		goto CleanUp;
 	}
 	vdehst = vdehist_new(STD_INPUT_HANDLE, server_socket);
-	fprintf(stdout, "%.*s\n",(int)strlen(prompt)+1,prompt);
+	fprintf(stdout, "%*.s\n",(int)strlen(prompt)+1,prompt);
 	while (1) {
 		FD_SET(server_socket,&read_fds);
 		FD_SET(server_socket, &write_fds);
@@ -126,7 +126,7 @@ int main(const int argc, const char** argv)
 		}
 		if (buffer_ready == 1)
 		{
-			if (vdehist_term_to_mgmt(vdehst) != 0)
+			if (vdehist_term_to_mgmt(vdehst,std_input_buffer,std_input_pos) != 0)
 			{
 				goto CleanUp;
 			}
@@ -222,7 +222,7 @@ static void setsighandlers()
 	for (i = 0; signals[i].sig != 0; i++)
 	{
 		sig = signal(signals[i].sig, signals[i].ignore ? SIG_IGN : sig_handler);
-		if ( sig == NULL)
+		if ( sig == SIG_ERR)
 		{
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			fprintf(stderr, "Error setting handler for %s: %s\n", signals[i].name,errorbuff);
@@ -267,7 +267,9 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 					n -= 2;
 					buf[n] = 0;
 					while (n > 0 && buf[n] != '\n')
+					{
 						n--;
+					}
 					fprintf(stdout, "%*.s\n", n + 1, buf);
 					//_write(termfd, buf, n + 1);
 					asprintf(&prompt, "%s[%s]: ", buf + n + 1, sock);

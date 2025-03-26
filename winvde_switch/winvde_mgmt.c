@@ -82,9 +82,9 @@ static struct comlist cl[] = {
 	{"load","path","load a configuration script",runscript,STRARG | WITHFD},
 #if defined(DEBUGOPT)
 	{"debug","============","DEBUG MENU",NULL,NOARG},
-	//{"debug/list","","list debug categories",debuglist,STRARG | WITHFILE | WITHFD},
-	//{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD | STRARG},
-	//{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD | STRARG},
+	{"debug/list","","list debug categories",debuglist,STRARG | WITHFILE | WITHFD},
+	{"debug/add","dbgpath","enable debug info for a given category",debugadd,WITHFD | STRARG},
+	{"debug/del","dbgpath","disable debug info for a given category",debugdel,WITHFD | STRARG},
 #endif
 #if defined(VDEPLUGIN)
 	{"plugin","============","PLUGINS MENU",NULL,NOARG},
@@ -310,7 +310,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 	char buf[MAXCMD];
 	int n = 0;
 	int cmdout = 0;
-	struct sockaddr_un addr;
+	struct sockaddr addr;
 	int one = 1;
 	SOCKET new = INVALID_SOCKET;
 	struct comparameter parameter = { 0 };
@@ -336,20 +336,24 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 			}
 			else
 			{
+				fprintf(stderr,"File descriptor closed\n");
 #ifdef DEBUGOPT
 				parameter.type1 = com_type_socket;
 				parameter.data1.socket = fd;
 				parameter.type2 = com_type_null;
 				parameter.paramType = com_param_type_string;
 				parameter.paramValue.stringValue = "";
-				//debugdel(&parameter);
+				debugdel(&parameter);
 #endif
 				remove_fd(fd);
 			}
 		}
 		else
 		{
-			buf[n] = 0;
+			if (n < sizeof(buf))
+			{
+				buf[n] = 0;
+			}
 			if (n > 0 && buf[n - 1] == '\n')
 			{
 				buf[n - 1] = 0;
@@ -357,13 +361,13 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 			cmdout = handle_cmd(type, (type == console_type) ? 1 : fd, buf);
 			if (cmdout >= 0)
 			{
-				send(fd, prompt, (int)strlen(prompt), 0);
+				send(fd, prompt, strlength(prompt), 0);
 			}
 			else
 			{
 				if (type == mgmt_data)
 				{
-					send(fd, EOS, (int)strlen(EOS),0);
+					send(fd, EOS, strlength(EOS),0);
 #ifdef DEBUGOPT
 					EVENTOUT(MGMTPORTDEL, fd);
 					parameter.type1 = com_type_socket;
@@ -371,7 +375,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 					parameter.type2 = com_type_null;
 					parameter.paramType = com_param_type_string;
 					parameter.paramValue.stringValue = "";
-					//debugdel(&parameter);
+					debugdel(&parameter);
 #endif
 					remove_fd(fd);
 				}
@@ -384,9 +388,10 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 	}
 	else
 	{/* mgmt ctl */
+		// This is the first management socket response
 		len = sizeof(addr);
-		new = accept(fd, &addr,  & len);
-		if (new < 0)
+		new = accept(fd, NULL, NULL);
+		if (new == INVALID_SOCKET)
 		{
 			strerror_s(errorbuff,sizeof(errorbuff),errno);
 			printlog(LOG_WARNING, "mgmt accept %s", errorbuff);
@@ -401,17 +406,17 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 		}
 
 		add_fd(new, mgmt_data, mgmgt_module.module_tag, NULL);
-		EVENTOUT(MGMTPORTNEW, new);
+		eventout(MGMTPORTNEW, new);
 		snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
-		send(new, buf, (int)strlen(buf),0);
-		send(new, prompt, (int)strlen(prompt),0);
+		send(new, buf, strlength(buf),0);
+		send(new, prompt, strlength(prompt),0);
 	}
 
 }
 
 void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
 {
-	if (fd < 0)
+	if (fd == INVALID_SOCKET)
 	{
 		if ((pidfile != NULL) && _unlink(pidfile_path) < 0)
 		{
@@ -833,10 +838,10 @@ void mgmtnewfd(SOCKET new)
 	}
 
 	add_fd(new, mgmt_data, mgmgt_module.module_tag, NULL);
-	EVENTOUT(MGMTPORTNEW, new);
+	eventout(MGMTPORTNEW, new);
 	snprintf(buf, MAXCMD, header, PACKAGE_VERSION);
-	send(new, buf, (int)strlen(buf),0);
-	send(new, prompt, (int)strlen(prompt),0);
+	send(new, buf, strlength(buf),0);
+	send(new, prompt, strlength(prompt),0);
 }
 
 #ifdef DEBUGOPT

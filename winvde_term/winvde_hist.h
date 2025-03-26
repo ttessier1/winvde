@@ -60,7 +60,7 @@ void get_history(int change, struct vdehiststat* st);
 void shift_history(struct vdehiststat* st);
 void telnet_option_send3(int fd, int action, int object);
 int telnet_options(struct vdehiststat* st, unsigned char* s);
-int vdehist_term_to_mgmt(struct vdehiststat* st);
+int vdehist_term_to_mgmt(struct vdehiststat* st,char * buffer, int size);
 struct vdehiststat* vdehist_new(int termfd, SOCKET mgmtfd);
 void vdehist_free(struct vdehiststat* st);
 int vdehist_getstatus(struct vdehiststat* st);

@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include <errno.h>
 #include "winvde_packetq.h"

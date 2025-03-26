@@ -11,7 +11,7 @@
 #include "winvde_ev.h"
 #include "winvde_printfunc.h"
 #include "winvde_event.h"
-
+#include "winvde_sockutils.h"
 
 
 #if defined(DEBUGOPT)
@@ -38,14 +38,14 @@ int debuglist(struct comparameter* parameter)
 		socket_stream = parameter->data1.socket;
 
 		asprintf(&buffer, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
-		send(socket_stream, buffer, (int)strlen(buffer), 0);
+		send(socket_stream, buffer, strlength(buffer), 0);
 		free(buffer);
 		asprintf(&buffer, DEBUGFORMAT1, "------------", "---", "------", "----");
-		send(socket_stream, buffer, (int)strlen(buffer), 0);
+		send(socket_stream, buffer, strlength(buffer), 0);
 		free(buffer);
 		for (p = dbg_cl_header; p != NULL; p = p->next)
 		{
-			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, (int)strlen(parameter->paramValue.stringValue)) == 0)
+			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlength(parameter->paramValue.stringValue)) == 0)
 			{
 				for (i = 0; i < p->nfds && p->fds[i] != socket_stream; i++)
 				{
@@ -53,7 +53,7 @@ int debuglist(struct comparameter* parameter)
 				}
 				rv = 0;
 				asprintf(&buffer, DEBUGFORMAT2, p->path, p->tag & 0777, i < p->nfds ? "ON" : "OFF", p->help);
-				send(socket_stream, buffer, (int)strlen(buffer), 0);
+				send(socket_stream, buffer, strlength(buffer), 0);
 				free(buffer);
 			}
 		}

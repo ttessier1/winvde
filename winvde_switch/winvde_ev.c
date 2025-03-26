@@ -33,7 +33,7 @@ size_t readv(SOCKET fd, struct iovec* iov, int iovcnt)
 				errno = ENOMEM;
 				break;
 			}
-			bytesRead = recv(fd, iov[index].iov_base, iov[index].iov_len,0);
+			bytesRead = recv(fd, iov[index].iov_base, (int)iov[index].iov_len,0);
 			if (bytesRead != iov[index].iov_len)
 			{
 				errno = EFAULT;
@@ -48,7 +48,8 @@ size_t readv(SOCKET fd, struct iovec* iov, int iovcnt)
 	}
 	return totalBytesRead;
 }
-size_t writev(SOCKET fd, const struct iovec* iov, int iovcnt)
+
+size_t writev(SOCKET fd, struct iovec* iov, int iovcnt)
 {
 	size_t bytesWritten = 0;
 	size_t totalBytesWritten = 0;
@@ -60,7 +61,7 @@ size_t writev(SOCKET fd, const struct iovec* iov, int iovcnt)
 	}
 	for (index = 0; index < iovcnt; index++)
 	{
-		bytesWritten = send(fd, iov[index].iov_len, sizeof(size_t), 0);
+		bytesWritten = send(fd, (char*) & iov[index].iov_len, sizeof(size_t), 0);
 		if (bytesWritten != sizeof(size_t))
 		{
 			errno = EFAULT;
