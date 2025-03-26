@@ -128,6 +128,11 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
         Closing
     };
     SOCKET clientSocket = INVALID_SOCKET;
+
+    WSAPOLLFD wsaPollFD[2] = {
+        {clientSocket,POLLIN,0},
+        {clientSocket,POLLOUT,0},
+    };
     int state = FirstPacket;
     char * buff = NULL;
     char * out = NULL;
@@ -146,9 +151,8 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
     {
         clientSocket = (SOCKET)parameter;
 
-        FD_ZERO(&read_fds);
-        FD_ZERO(&write_fds);
-        FD_ZERO(&exception_fds);
+        wsaPollFD[0].fd = clientSocket;
+        wsaPollFD[1].fd = clientSocket;
 
 
         buff = (char*)malloc(1500);
@@ -162,18 +166,16 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
         
         while (1)
         {
-            FD_SET(clientSocket, &read_fds);
-            FD_SET(clientSocket, &write_fds);
-            FD_SET(clientSocket, &exception_fds);
 
-            sel = select(1, &read_fds, &write_fds, &exception_fds, NULL);
+            sel = WSAPoll((LPWSAPOLLFD) &wsaPollFD, 2, 0);
 
             if (sel < 0)
             {
+                fprintf(stderr, "Failed to WSAPoll: %d\n", WSAGetLastError());
                 continue;
             }
 
-            if (FD_ISSET(clientSocket, &read_fds))
+            if (wsaPollFD[0].revents & POLLIN)
             {
 
                 memset(buff, 0, sizeof(buff));
@@ -223,8 +225,8 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
             }
 
            
-            if (FD_ISSET(clientSocket,&write_fds) &&buffer_ready==1 || 
-                FD_ISSET(clientSocket, &write_fds)  && state==FirstPacket
+            if ((wsaPollFD[1].revents & POLLOUT) &&buffer_ready==1 ||
+                (wsaPollFD[1].revents & POLLOUT) && state==FirstPacket
             )
             {
                 if (state == FirstPacket)
@@ -241,7 +243,22 @@ DWORD APIENTRY ClientThread(LPVOID parameter)
                         goto CleanUp;
                     }
                     memcpy(out, std_input_buffer, std_input_pos);
+                    if (memcmp(std_input_buffer, "exit", min(std_input_pos,strlen("exit"))))
+                    {
+                        send(clientSocket, out, std_input_pos, 0);
+
+                        bytesWritten = 0;
+                        buffer_ready = 0;
+                        std_input_pos = 0;
+                        if (out)
+                        {
+                            free(out);
+                            out = NULL;
+                        }
+                        break;
+                    }
                     send(clientSocket, out, std_input_pos, 0);
+                    
                     bytesWritten = 0;
                     buffer_ready = 0;
                     std_input_pos = 0;

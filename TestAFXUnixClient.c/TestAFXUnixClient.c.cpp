@@ -42,6 +42,11 @@ int main()
     DWORD buffer_ready = 0;
     int sel = 0;
 
+    WSAPOLLFD wsaPollFD[2] = {
+       {serverSocket,POLLIN,0},
+       {serverSocket,POLLOUT,0},
+    };
+
     memset(&wsadata, 0, sizeof(WSADATA));
 
 
@@ -72,28 +77,22 @@ int main()
         goto CleanUp;
     }
 
-    FD_ZERO(&read_fds);
-    FD_ZERO(&write_fds);
-    FD_ZERO(&exception_fds);
+    wsaPollFD[0].fd = serverSocket;
+    wsaPollFD[1].fd = serverSocket;
 
-    
-
+   
     while (1)
     {
-        FD_SET(serverSocket, &read_fds);
-        FD_SET(serverSocket, &write_fds);
-        FD_SET(serverSocket, &exception_fds);
-        // FD_SET(STD_INPUT_HANDLE, &read_fds);
-        // FD_SET(STD_OUTPUT_HANDLE, &write_fds);
+        sel = WSAPoll((LPWSAPOLLFD) & wsaPollFD, 2, 0);
 
-        sel = select(3, &read_fds, &write_fds, &exception_fds, NULL);
         if (sel < 0)
         {
+            fprintf(stderr, "Failed to poll for sockets: %d\n", WSAGetLastError());
             continue;
         }
-        if (FD_ISSET(serverSocket, &read_fds))
+        if(wsaPollFD[0].revents & POLLIN)
         {
-            rc = recv(serverSocket, recvBuffer, recvBufferSize, 0);
+            rc = recv(wsaPollFD[0].fd, recvBuffer, recvBufferSize, 0);
             if (rc < 0)
             {
                 fprintf(stderr, "Failed to receive:%d\n", WSAGetLastError());
@@ -125,6 +124,11 @@ int main()
                     fprintf(stdout,"Remote Server quit\n");
                     goto CleanUp;
                 }
+                if (memcmp(recvBuffer, "exit", min(rc, strlen("exit"))) == 0)
+                {
+                    fprintf(stdout, "Remote Server quit\n");
+                    goto CleanUp;
+                }
             }
         }
         if (_kbhit())
@@ -145,7 +149,7 @@ int main()
             }
 
         }
-        if (FD_ISSET(serverSocket, &write_fds) && buffer_ready==1)
+        if ((wsaPollFD[1].revents & POLLOUT )&& buffer_ready==1)
         {
             buff = (char*)malloc(std_input_pos + 1);
             if (!buff)
@@ -154,7 +158,7 @@ int main()
                 goto CleanUp;
             }
             memcpy(buff, std_input_buffer, std_input_pos);
-            rc = send(serverSocket, buff, std_input_pos, 0);
+            rc = send(wsaPollFD[1].fd, buff, std_input_pos, 0);
             if (rc != SOCKET_ERROR)
             {
                 fprintf(stdout, "Sent: %d bytes over the channel\n", rc);
@@ -166,11 +170,6 @@ int main()
                 free(buff);
                 buff = NULL;
             }
-        }
-        if (FD_ISSET(serverSocket, &exception_fds))
-        {
-            fprintf(stderr, "Exception on serversocket\n");
-            goto CleanUp;
         }
     }
 
