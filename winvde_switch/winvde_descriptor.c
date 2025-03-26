@@ -73,6 +73,7 @@ void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* pri
 	p = &fds[index];
 	p->fd = fd;
 	p->events = POLLIN | POLLHUP;
+	fdpp[index]->fd = fd;
 	fdpp[index]->index = module_index;
 	fdpp[index]->type = type;
 	fdpp[index]->private_data = private_data;

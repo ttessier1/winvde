@@ -251,7 +251,7 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 		FD_SET(vdefd, &write_fds);
 		FD_SET(vdefd, &exception_fds);
 
-		sel = select(1, &read_fds, &write_fds, &exception_fds, NULL);
+		sel = select(3, &read_fds, &write_fds, &exception_fds, NULL);
 		if (sel < 0)
 		{
 			continue;
@@ -260,7 +260,6 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 		{
 			while ((n = recv(vdefd, buf, BUFSIZE, 0)) > 0)
 			{
-
 				if (buf[n - 2] == '$' &&
 					buf[n - 1] == ' ')
 				{
@@ -281,6 +280,14 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 					//_write(termfd, buf, n);
 				}
 			}
+		}
+		if (FD_ISSET(vdefd, &write_fds))
+		{
+			fprintf(stdout, "Write FD Available\n");
+		}
+		if (FD_ISSET(vdefd, &exception_fds))
+		{
+			fprintf(stdout, "Write FD Available\n");
 		}
 	}
 	return NULL;
