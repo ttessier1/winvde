@@ -27,16 +27,15 @@ int main()
     WSADATA wsadata;
     SOCKET serverSocket = INVALID_SOCKET;
     SOCKADDR_UN sock_addr;
+
+    LPWSAPOLLFD wsaPollFD = NULL;
+
     int rc = 0;
     char recvBuffer[recvBufferSize];
     char* buff = (char*)MESSAGE;
 
     fpos_t std_in_pos = 0;
     fpos_t std_last_in_pos = 0;
-
-    fd_set read_fds;
-    fd_set write_fds;
-    fd_set exception_fds;
     
     DWORD one = 1;
     DWORD buffer_ready = 0;
@@ -72,26 +71,30 @@ int main()
         goto CleanUp;
     }
 
-    FD_ZERO(&read_fds);
-    FD_ZERO(&write_fds);
-    FD_ZERO(&exception_fds);
-
+    wsaPollFD = (LPWSAPOLLFD)malloc(sizeof(WSAPOLLFD)*2);
     
+    if (!wsaPollFD)
+    {
+        fprintf(stderr, "Failed to allocate memory for PollFD\n");
+        goto CleanUp;
+    }
+
+    wsaPollFD[0].fd = serverSocket;
+    wsaPollFD[0].events = POLLIN ;
+    wsaPollFD[0].revents = 0;
+    wsaPollFD[1].fd = serverSocket;
+    wsaPollFD[1].events = POLLOUT ;
+    wsaPollFD[1].revents = 0;
 
     while (1)
     {
-        FD_SET(serverSocket, &read_fds);
-        FD_SET(serverSocket, &write_fds);
-        FD_SET(serverSocket, &exception_fds);
-        // FD_SET(STD_INPUT_HANDLE, &read_fds);
-        // FD_SET(STD_OUTPUT_HANDLE, &write_fds);
-
-        sel = select(3, &read_fds, &write_fds, &exception_fds, NULL);
+        sel = WSAPoll(wsaPollFD, 2, 0);
         if (sel < 0)
         {
-            continue;
+            fprintf(stderr, "Failed to WSAPoll:%d\n",WSAGetLastError());
+            break;
         }
-        if (FD_ISSET(serverSocket, &read_fds))
+        if (wsaPollFD[0].revents & POLLIN)
         {
             rc = recv(serverSocket, recvBuffer, recvBufferSize, 0);
             if (rc < 0)
@@ -125,7 +128,17 @@ int main()
                     fprintf(stdout,"Remote Server quit\n");
                     goto CleanUp;
                 }
+                if (memcmp(recvBuffer, "exit", min(rc, strlen("exit"))) == 0)
+                {
+                    fprintf(stdout, "Remote Server quit\n");
+                    goto CleanUp;
+                }
             }
+        }
+        if(wsaPollFD[0].revents&POLLHUP)
+        {
+            fprintf(stderr, "HangUp\n");
+            goto CleanUp;
         }
         if (_kbhit())
         {
@@ -145,7 +158,7 @@ int main()
             }
 
         }
-        if (FD_ISSET(serverSocket, &write_fds) && buffer_ready==1)
+        if ((wsaPollFD[0].revents & POLLOUT) && buffer_ready==1)
         {
             buff = (char*)malloc(std_input_pos + 1);
             if (!buff)
@@ -167,9 +180,9 @@ int main()
                 buff = NULL;
             }
         }
-        if (FD_ISSET(serverSocket, &exception_fds))
+        if (wsaPollFD[1].revents & POLLHUP)
         {
-            fprintf(stderr, "Exception on serversocket\n");
+            fprintf(stderr, "HangUp\n");
             goto CleanUp;
         }
     }
