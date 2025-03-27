@@ -110,6 +110,7 @@ int main(const int argc, const char** argv)
 			{
 				if (memcmp(std_input_buffer, "exit", min(strlen("exit"), std_input_pos)) == 0)
 				{
+					system("cls");
 					std_input_pos = 0;
 					goto CleanUp;
 				}
@@ -121,6 +122,7 @@ int main(const int argc, const char** argv)
 				}
 				else
 				{
+					system("cls");
 					buffer_ready = 1;
 				}
 			}

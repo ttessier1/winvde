@@ -15,26 +15,30 @@ Current Goals:
     - move non vde_switch functions into separate header files and accompanying c files
     - move defines into appropriate header files
     - move global variables into appropriate header files as extern and c files as storage variable
-* Implement getopt and getopt_long linux functions - Done preliminary!
-* Implement windows log level constants to linux log level constants mapping - Done preliminary!
-* Change all int socket file descriptors to SOCKET
-* Change all _read and _write to send and recv functions where SOCKET is used - Done preliminary
-* Implement stat functions supporting links and get_real_path to find the actual link path
-  - readlink, custom struct to override 64 bit windows stat, - Done preliminary
-* Implement group and user id functions
-  - make a user id lookup and group id lookup ensuring that administrator is 0 and administrators group is 0 - Done preliminary
-  - make a user and group listing function so that users of the program may look up the information - Done preliminary
-  - the user and group lists may need to be cached to be able to list the snapshot of when the lists were captured in case changes occur - not done
-* Implement readv and writev
-    - readv and writev needs to simulate the linux functions - Done preliminary
-* Implement modules - Done preliminary
+# * Implement getopt and getopt_long linux functions - Done preliminary!
+# * Implement windows log level constants to linux log level constants mapping - Done preliminary!
+# * Change all int socket file descriptors to SOCKET - Done preliminary
+# * Change all _read and _write to send and recv functions where SOCKET is used - Done preliminary
+# * Implement stat functions supporting links and get_real_path to find the actual link path
+#   - readlink, custom struct to override 64 bit windows stat, - Done preliminary
+# * Implement group and user id functions
+#  - make a user id lookup and group id lookup ensuring that administrator is 0 and administrators group is 0 - Done preliminary
+#   - make a user and group listing function so that users of the program may look up the information - Done preliminary
+#   - the user and group lists may need to be cached to be able to list the snapshot of when the lists were captured in case changes occur - not done
+# * Implement readv and writev
+#     - readv and writev needs to simulate the linux functions - Done preliminary
+# * Implement modules - Done preliminary
 * Implement plugins
-* Implement mod_support - Done prelminary
-* Implement Memory Stream - Done preliminary
-* Implement DoIt function - Done preliminary
-* Fix artifacts in the console routines to clear line before output or otherwise clear the screen before output
+# * Implement mod_support - Done prelminary
+# * Implement Memory Stream - Done preliminary
+# * Implement DoIt function - Done preliminary
+* Fix artifacts in the console routines to clear line before output or otherwise clear the screen before output - Done preliminary
 * Fix backspace to work properly and not allow backspace past prompt
 * Fix up/down characters to traverse history
+* Todo Implement plugin dump
+* Todo Implement plugin iplog
+* Todo Implement plugin pdump
+* Todo Implement module Tap
 
 NOTE: initial working management connecion is possible now but buggy 2025-03-27
 The problem is that some of the details from linux use a memory stream with a file pointer,
