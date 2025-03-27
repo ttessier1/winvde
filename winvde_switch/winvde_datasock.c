@@ -28,6 +28,8 @@
 #include "winvde_user.h"
 #include "winvde_descriptor.h"
 #include "winvde_port.h"
+#include "winvde_memorystream.h"
+#include "winvde_printfunc.h"
 
 // defines
 
@@ -144,20 +146,67 @@ void StartDataSock(void)
 
 int datasock_showinfo(struct comparameter * parameter)
 {
+	char* tmpBuff = NULL;
+	size_t length = 0 ;
 	if (!parameter)
 	{
 		errno = EINVAL;
 		return -1;
 	}
-	if(parameter->type1 == com_type_file && parameter->data1.file_descriptor==NULL)
-	{
-		errno = EINVAL;
-		return -1;
-	}
-	if(parameter->type1 == com_type_file)
+	if(parameter->type1 == com_type_file && parameter->data1.file_descriptor!=NULL)
 	{
 		printoutc(parameter->data1.file_descriptor, "ctl dir %s", ctl_socket);
 		printoutc(parameter->data1.file_descriptor, "std mode 0%03o", mode);
+	}
+	else if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET)
+	{
+		length = asprintf(&tmpBuff, "ctl dir %s\n", ctl_socket);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff,(int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "std mode 0%03o\n", mode);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length,0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+	}
+	else if (parameter->type1 == com_type_memstream && parameter->data1.mem_stream != NULL)
+	{
+		length = asprintf(&tmpBuff, "ctl dir %s\n", ctl_socket);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "std mode 0%03o\n", mode);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
 	}
 	return 0;
 }

@@ -170,7 +170,7 @@ size_t writechar_memorystream(struct _memory_file* file, const char thechar)
             file->buffer_chain = file->buffer_chain->next;
             file->buffer_chain->buffer_id = file->buffer_index++;
             remaining = MEMORY_BUFFER_SIZE;
-            memcpy(&file->buffer_chain->buffer[file->buffer_pos], thechar, min(remaining, buffsize));
+            memcpy(&file->buffer_chain->buffer[file->buffer_pos], &thechar, min(remaining, buffsize));
             written = min(remaining, buffsize);
             buffoffset += written;
             file->buffer_pos += written;

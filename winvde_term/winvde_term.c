@@ -36,22 +36,16 @@ int main(const int argc, const char** argv)
 	WSADATA wsaData;
 
 	struct sockaddr_un sun;
-	SOCKET server_socket = INVALID_SOCKET;
+	SOCKET serverSocket = INVALID_SOCKET;
 	DWORD one = 1;
 
-	fd_set read_fds;
-	fd_set write_fds;
-	fd_set exception_fds;
+	LPWSAPOLLFD wsaPollFD = NULL;
 
 	int sel = 0;
 
 	int rv;
 	int buffer_ready = 0;
 	struct vdehiststat* vdehst=NULL;
-
-	FD_ZERO(&read_fds);
-	FD_ZERO(&write_fds);
-	FD_ZERO(&exception_fds);
 
 	if(WSAStartup(MAKEWORD(2, 2), &wsaData) == SOCKET_ERROR)
 	{
@@ -64,52 +58,81 @@ int main(const int argc, const char** argv)
 	sun.sun_family = PF_UNIX;
 	snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", argv[1]);
 	//asprintf(&prompt,"vdterm[%s]: ",argv[1]);
-	if ((server_socket = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
+	if ((serverSocket = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
 		perror("Socket opening error");
 		WSACleanup();
 		exit(-1);
 	}
-	if ((rv = connect(server_socket, (struct sockaddr*)(&sun), sizeof(sun))) < 0) {
+	if ((rv = connect(serverSocket, (struct sockaddr*)(&sun), sizeof(sun))) < 0) {
 		strerror_s(errorbuff, sizeof(errorbuff), errno);
-		fprintf(stderr,"Socket connecting error: %s %d\n", errorbuff, WSAGetLastError());
+		fprintf(stderr, "Socket connecting error: %s %d\n", errorbuff, WSAGetLastError());
 		WSACleanup();
 		exit(-1);
 	}
-	if (ioctlsocket(server_socket, FIONBIO, &one) < 0)
+	if (ioctlsocket(serverSocket, FIONBIO, &one) < 0)
 	{
 		perror("Failed to set non blocking mode on socket\n");
 		//exit(-1);
 	}
-	
-	prompt = copy_header_prompt(server_socket, STD_OUTPUT_HANDLE, (char*)argv[1]);
+	wsaPollFD = (LPWSAPOLLFD)malloc(sizeof(WSAPOLLFD) * 2);
+	if (wsaPollFD == NULL)
+	{
+		fprintf(stderr, "Failed to allocate memory for WSAPoll Descriptor\n");
+		goto CleanUp;
+	}
+	wsaPollFD[0].fd = serverSocket;
+	wsaPollFD[0].events = POLLIN;
+	wsaPollFD[0].revents = 0;
+	wsaPollFD[1].fd = serverSocket;
+	wsaPollFD[1].events = POLLOUT;
+	wsaPollFD[1].revents = 0;
+	prompt = copy_header_prompt(serverSocket, STD_OUTPUT_HANDLE, (char*)argv[1]);
 	if (prompt == NULL)
 	{
 		fprintf(stderr, "Failed to read the prompt\n");
 		goto CleanUp;
 	}
-	vdehst = vdehist_new(STD_INPUT_HANDLE, server_socket);
-	fprintf(stdout, "%*.s\n",(int)strlen(prompt)+1,prompt);
+	vdehst = vdehist_new(_fileno(stdout), serverSocket);
+	fprintf(stdout, "%.*s\n", (int)strlen(prompt) + 1, prompt);
 	while (1) {
-		FD_SET(server_socket,&read_fds);
-		FD_SET(server_socket, &write_fds);
-		FD_SET(server_socket, &exception_fds);
-		sel = select(1, &read_fds, &write_fds, &exception_fds, NULL);
+
+		sel = WSAPoll(wsaPollFD, 2, 0);
 		if (sel < 0)
 		{
-			continue;
+			fprintf(stderr, "Failed to poll:%d\n", WSAGetLastError());
+			break;
 		}
-		if (sel == 0)
+
+		if (_kbhit())
 		{
-			if (_kbhit())
+			std_input_buffer[std_input_pos] = _getche();
+			if (std_input_buffer[std_input_pos] == '\n' || std_input_buffer[std_input_pos] == '\r')
 			{
-				std_input_buffer[std_input_pos] = _getche();
-				if (std_input_buffer[std_input_pos] == '\n' || std_input_buffer[std_input_pos] == '\r')
+				if (memcmp(std_input_buffer, "exit", min(strlen("exit"), std_input_pos)) == 0)
+				{
+					std_input_pos = 0;
+					goto CleanUp;
+				}
+				else if (memcmp(std_input_buffer, "cls", min(strlen("cls"), std_input_pos)) == 0)
+				{
+					system("cls");
+					fprintf(stdout, "%.*s\n", (int)strlen(prompt) + 1, prompt);
+					std_input_pos = 0;
+				}
+				else
 				{
 					buffer_ready = 1;
 				}
-				else if (std_input_pos >= BUFFER_SIZE - 1)
+			}
+			else if (std_input_pos >= BUFFER_SIZE - 1)
+			{
+				buffer_ready = 1;
+			}
+			else
+			{
+				if (std_input_buffer[std_input_pos] == '\b' && std_input_pos > 0)
 				{
-					buffer_ready = 1;
+					std_input_pos--;
 				}
 				else
 				{
@@ -117,25 +140,42 @@ int main(const int argc, const char** argv)
 				}
 			}
 		}
-		else if (sel > 0)
+		if (sel > 0)
 		{
-			if (FD_ISSET(server_socket, &read_fds))
+			if (wsaPollFD[0].revents & POLLIN)
 			{
-				vdehist_mgmt_to_term(vdehst);
+				if (vdehist_mgmt_to_term(vdehst) < 0)
+				{
+					goto CleanUp;
+				}
 			}
-		}
-		if (buffer_ready == 1)
-		{
-			if (vdehist_term_to_mgmt(vdehst,std_input_buffer,std_input_pos) != 0)
+			if (wsaPollFD[1].revents & POLLOUT && buffer_ready == 1)
 			{
+
+				if (vdehist_term_to_mgmt(vdehst, std_input_buffer, std_input_pos) != 0)
+				{
+					goto CleanUp;
+				}
+				buffer_ready = 0;
+				std_input_pos = 0;
+			}
+			if ((wsaPollFD[0].revents & POLLHUP) ||
+				(wsaPollFD[1].revents & POLLHUP) )
+			{
+				fprintf(stderr, "ServerClosed Connection\n");
 				goto CleanUp;
 			}
 		}
 	}
 CleanUp:
-	if (server_socket != INVALID_SOCKET)
+	if (wsaPollFD != NULL)
 	{
-		closesocket(server_socket);
+		free(wsaPollFD);
+		wsaPollFD = NULL;
+	}
+	if (serverSocket != INVALID_SOCKET)
+	{
+		closesocket(serverSocket);
 	}
 	WSACleanup();
     return 0;
@@ -237,26 +277,32 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 	int n;
 	int sel = 0;
 	char* prompt;
-	fd_set read_fds;
-	fd_set write_fds;
-	fd_set exception_fds;
 
-	FD_ZERO(&read_fds);
-	FD_ZERO(&write_fds);
-	FD_ZERO(&exception_fds);
+	LPWSAPOLLFD wsaPollFD = NULL;
+	
+	wsaPollFD = (LPWSAPOLLFD)malloc(sizeof(WSAPOLLFD)*2);
+	if (!wsaPollFD)
+	{
+		fprintf(stderr, "Failed to allocate memory for WSAPoll Descriptors\n");
+		return NULL;
+	}
+
+	wsaPollFD[0].fd = vdefd;
+	wsaPollFD[0].events = POLLIN;
+	wsaPollFD[0].revents = 0;
+	wsaPollFD[1].fd = vdefd;
+	wsaPollFD[1].events = POLLOUT;
+	wsaPollFD[1].revents = 0;
 
 	while (1)
 	{
-		FD_SET(vdefd, &read_fds);
-		FD_SET(vdefd, &write_fds);
-		FD_SET(vdefd, &exception_fds);
-
-		sel = select(3, &read_fds, &write_fds, &exception_fds, NULL);
+		sel = WSAPoll(wsaPollFD,2,0);
 		if (sel < 0)
 		{
-			continue;
+			fprintf(stderr, "Failed to Poll: %d\n",WSAGetLastError());
+			break;
 		}
-		if (FD_ISSET(vdefd, &read_fds))
+		if (wsaPollFD[0].revents&POLLIN)
 		{
 			while ((n = recv(vdefd, buf, BUFSIZE, 0)) > 0)
 			{
@@ -269,26 +315,23 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 					{
 						n--;
 					}
-					fprintf(stdout, "%*.s\n", n + 1, buf);
+					fprintf(stdout, "%.*s\n", n + 1, buf);
 					//_write(termfd, buf, n + 1);
 					asprintf(&prompt, "%s[%s]: ", buf + n + 1, sock);
 					return prompt;
 				}
 				else
 				{
-					fprintf(stdout, "%*.s\n", n, buf);
+					fprintf(stdout, "%.*s\n", n, buf);
 					//_write(termfd, buf, n);
 				}
 			}
 		}
-		if (FD_ISSET(vdefd, &write_fds))
-		{
-			fprintf(stdout, "Write FD Available\n");
-		}
-		if (FD_ISSET(vdefd, &exception_fds))
-		{
-			fprintf(stdout, "Write FD Available\n");
-		}
+	}
+	if (wsaPollFD!=NULL)
+	{
+		free(wsaPollFD);
+		wsaPollFD = NULL;
 	}
 	return NULL;
 }

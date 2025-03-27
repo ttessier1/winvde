@@ -136,46 +136,57 @@ char* vdehist_readln(SOCKET vdefd, char* linebuf, int size, struct vh_readln* vl
 	int i;
 	char lastch = ' ';
 	int sel = 0;
-	fd_set read_fds;
-	fd_set write_fds;
-	fd_set exception_fds;
-
-	FD_ZERO(&read_fds);
-	FD_ZERO(&write_fds);
-	FD_ZERO(&exception_fds);
+	LPWSAPOLLFD wsaPollFD = NULL;
+	
+	wsaPollFD = (LPWSAPOLLFD)malloc(sizeof(WSAPOLLFD) * 2);
+	if (!wsaPollFD)
+	{
+		fprintf(stderr, "Failed to allocate memory for WSAPollFD\n");
+		return NULL;
+	}
+	wsaPollFD[0].fd = vdefd;
+	wsaPollFD[0].events = POLLIN;
+	wsaPollFD[0].revents = 0;
+	wsaPollFD[1].fd = vdefd;
+	wsaPollFD[1].events = POLLOUT;
+	wsaPollFD[1].revents = 0;
 	i = 0;
 	do
 	{
 		if (vlb->readbufindex == vlb->readbufsize)
 		{
-			FD_SET(vdefd, &read_fds);
-			FD_SET(vdefd, &write_fds);
-			FD_SET(vdefd, &exception_fds);
-
-			sel = select(1,&read_fds,&write_fds,&exception_fds,NULL);
+			sel = WSAPoll(wsaPollFD,2,0);
 			if (sel < 0)
 			{
-				if (WSAGetLastError() == WSAEINPROGRESS)
-				{
-					continue;
-				}
-				fprintf(stderr, "Failed to do select on readlin: %d\n",WSAGetLastError());
+				linebuf = NULL;
+				fprintf(stderr, "Failed to do WSAPoll on readlin: %d\n",WSAGetLastError());
 				break;
 			}
 			if ((vlb->readbufsize = recv(vdefd, vlb->readbuf, BUFSIZE,0)) <= 0)
 			{
-				return NULL;
+				linebuf = NULL;
+				break;
 			}
 			vlb->readbufindex = 0;
 		}
 		if (vlb->readbuf[vlb->readbufindex] == ' ' && lastch == '$' && vlb->readbufindex == vlb->readbufsize - 1)
 		{
-			return NULL;
+			linebuf = NULL;
+			goto CleanUp;
 		}
 		lastch = linebuf[i] = vlb->readbuf[vlb->readbufindex];
 		i++; vlb->readbufindex++;
 	} while (lastch != '\n' && i < size - 1);
-	linebuf[i] = 0;
+	if (linebuf != NULL)
+	{
+		linebuf[i] = 0;
+	}
+CleanUp:
+	if (wsaPollFD!=NULL)
+	{
+		free(wsaPollFD);
+		wsaPollFD = NULL;
+	}
 	return linebuf;
 }
 
@@ -189,6 +200,7 @@ int vdehist_create_commandlist(SOCKET vdefd)
 	char* returnBuf = NULL;
 	size_t * bufsize;
 	char* lastcommand = NULL;
+	int commentCount = 0;
 	/* use a memstream to create the array.
 		 add (char *) elements by fwrite */
 	struct _memory_file* ms = NULL;
@@ -231,15 +243,17 @@ int vdehist_create_commandlist(SOCKET vdefd)
 						}
 						else
 						{
-							write_memorystream(ms, (char*)& lastcommand, sizeof(char*));
+							write_memorystream(ms, (char*)&lastcommand, sizeof(char*));
 							//fwrite(&lastcommand, sizeof(char*), 1, ms);
+							commentCount++;
 						}
 					}
 					lastcommand = _strdup(linebuf);
+					
 				}
 			}
 		}
-		if (readSomeData == 0)
+		if (readSomeData == 0 && lastcommand!=NULL)
 		{
 			return -1;
 		}
@@ -255,10 +269,12 @@ int vdehist_create_commandlist(SOCKET vdefd)
 		returnBuf = malloc(*bufsize);
 		if (returnBuf)
 		{
+			get_buffer(ms);
+			memcpy(returnBuf, buf,*bufsize);
 			commandlist = (char**)returnBuf;
 		}
+		qsort(commandlist, commentCount, sizeof(char*), qstrcmp);
 		close_memorystream(ms);
-		qsort(commandlist, (*bufsize / sizeof(char*)) - 1, sizeof(char*), qstrcmp);
 	}
 	return 0;
 }
@@ -347,7 +363,7 @@ void redraw_line(struct vdehiststat* st, int prompt_too)
 	}
 }
 
-void vdehist_mgmt_to_term(struct vdehiststat* st)
+int vdehist_mgmt_to_term(struct vdehiststat* st)
 {
 	char buf[BUFSIZE + 1];
 	size_t n = 0;
@@ -359,9 +375,14 @@ void vdehist_mgmt_to_term(struct vdehiststat* st)
 	if (st->mgmtfd)
 	{
 		n = vdehist_vderead(st->mgmtfd, buf, BUFSIZE,0);
+		if (n < 0)
+		{
+			fprintf(stderr, "Failed to read: %d\n",WSAGetLastError());
+			return -1;
+		}
 		//fprintf(stderr,"mgmt2term n=%d\n",n);
 		buf[n] = 0;
-		while (n > 0)
+		while (n != 0xFFFFFFFFFFFFFFFF && n > 0)
 		{
 			for (ib = 0; ib < n; ib++)
 			{
@@ -424,10 +445,14 @@ void vdehist_mgmt_to_term(struct vdehiststat* st)
 	}
 	if (commandlist == NULL && st->mgmtfd >= 0)
 	{
-		vdehist_create_commandlist(st->mgmtfd);
+		if (vdehist_create_commandlist(st->mgmtfd) == -1)
+		{
+			return -1;
+		}
 	}
 	/* redraw the input line */
 	redraw_line(st, 1);
+	return 0;
 }
 
 int hist_sendcmd(struct vdehiststat* st)
@@ -569,14 +594,11 @@ int telnet_options(struct vdehiststat* st, unsigned char* s)
 
 size_t vdehist_term_to_mgmt(struct vdehiststat* st,char * buf, int size)
 {
-	//unsigned char buf[BUFSIZE];
 	int i = 0;
 	int rv = 0;
-	//n = vdehist_termread(st->termfd, buf, BUFSIZE);
-	//printf("termto mgmt N%d %x %x %x %x\n",n,buf[0],buf[1],buf[2],buf[3]);
 	if (!buf || size == 0)
 	{
-		return 1;
+		return -1;
 	}
 	else if (size < 0)
 	{
@@ -713,7 +735,10 @@ size_t vdehist_term_to_mgmt(struct vdehiststat* st,char * buf, int size)
 						{
 							vdehist_termwrite(st->termfd, "\033[@", 3);
 						}
-						vdehist_termwrite(st->termfd, &(buf[i]), 1);
+						vdehist_termwrite(st->termfd, &(buf[i]), size);
+						send(st->mgmtfd, &(buf[i]), size,0);
+						
+						i += size;
 					}
 					if (buf[i] != '\r')
 					{

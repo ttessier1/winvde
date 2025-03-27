@@ -24,6 +24,7 @@ short* fdperm;
 uint64_t fdpermsize = 0;
 
 uint32_t number_of_filedescriptors = 0;
+uint32_t number_of_socket_descriptors = 0;
 
 void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* private_data)
 {
@@ -43,7 +44,7 @@ void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* pri
 			exit(1);
 		}
 	}
-	if (fd >= fdpermsize)
+	if (fd != INVALID_SOCKET && fd >= fdpermsize)
 	{
 		fdpermsize = ((fd >> FDPERMSIZE_LOGSTEP) + 1) << FDPERMSIZE_LOGSTEP;
 		if ((fdperm = (short*)realloc(fdperm, fdpermsize * sizeof(short))) == NULL)
@@ -71,14 +72,32 @@ void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* pri
 	}
 	fdperm[fd] = index;
 	p = &fds[index];
-	p->fd = fd;
-	p->events = POLLIN | POLLHUP;
-	fdpp[index]->fd = fd;
+	if (fd == 0|| fd== INVALID_SOCKET)
+	{
+		p->fd = INVALID_SOCKET;
+	}
+	else
+	{
+		p->fd = fd;
+	}
+	p->events = POLLIN ;
+	if (fd == 0 || fd == INVALID_SOCKET)
+	{
+		fdpp[index]->fd = INVALID_SOCKET;
+	}
+	else
+	{
+		fdpp[index]->fd = fd;
+	}
 	fdpp[index]->index = module_index;
 	fdpp[index]->type = type;
 	fdpp[index]->private_data = private_data;
 	fdpp[index]->timestamp = 0;
 	number_of_filedescriptors++;
+	if (fd != 0 && fd != INVALID_SOCKET)
+	{
+		number_of_socket_descriptors++;
+	}
 }
 
 void remove_fd(SOCKET fd)

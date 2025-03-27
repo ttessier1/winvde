@@ -55,14 +55,14 @@ char* vdehist_readln(SOCKET vdefd, char* linebuf, int size, struct vh_readln* vl
 int vdehist_create_commandlist(SOCKET vdefd);
 void erase_line(struct vdehiststat* st, int prompt_too);
 void redraw_line(struct vdehiststat* st, int prompt_too);
-void vdehist_mgmt_to_term(struct vdehiststat* st);
+int vdehist_mgmt_to_term(struct vdehiststat* st);
 int hist_sendcmd(struct vdehiststat* st);
 void put_history(struct vdehiststat* st);
 void get_history(int change, struct vdehiststat* st);
 void shift_history(struct vdehiststat* st);
 void telnet_option_send3(int fd, int action, int object);
 int telnet_options(struct vdehiststat* st, unsigned char* s);
-size_t vdehist_term_to_mgmt(struct vdehiststat* st);
+size_t vdehist_term_to_mgmt(struct vdehiststat* st, char* buf, int size);
 struct vdehiststat* vdehist_new(int termfd, SOCKET mgmtfd);
 void vdehist_free(struct vdehiststat* st);
 int vdehist_getstatus(struct vdehiststat* st);

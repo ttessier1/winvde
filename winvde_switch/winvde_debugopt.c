@@ -12,6 +12,7 @@
 #include "winvde_printfunc.h"
 #include "winvde_event.h"
 #include "winvde_sockutils.h"
+#include "winvde_memorystream.h"
 
 
 #if defined(DEBUGOPT)
@@ -21,40 +22,121 @@ char _dbgnl = '\n';
 //int debuglist(FILE* f, int fd, char* path)
 int debuglist(struct comparameter* parameter)
 {
-#define DEBUGFORMAT1 "%-22s %-3s %-6s %s"
-#define DEBUGFORMAT2 "%-22s %03o %-6s %s"
+	size_t length = 0;
+	char* tmpBuff = NULL;
 	SOCKET socket_stream = INVALID_SOCKET;
-	char* buffer = NULL;
 	struct dbgcl* p;
-	int i;
+	int index;
 	int rv = ENOENT;
+#define DEBUGFORMAT1 "%-22s %-3s %-6s %s\n"
+#define DEBUGFORMAT2 "%-22s %03o %-6s %s\n"
+	
 	if (!parameter)
 	{
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	if (parameter->type1 == com_type_socket && 
+		parameter->data1.socket != INVALID_SOCKET && 
+		parameter->type2 == com_type_socket &&
+		parameter->data2.socket != INVALID_SOCKET &&
+		parameter->paramType == com_param_type_string && 
+		parameter->paramValue.stringValue != NULL)
 	{
-		socket_stream = parameter->data1.socket;
-
-		asprintf(&buffer, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
-		send(socket_stream, buffer, strlength(buffer), 0);
-		free(buffer);
-		asprintf(&buffer, DEBUGFORMAT1, "------------", "---", "------", "----");
-		send(socket_stream, buffer, strlength(buffer), 0);
-		free(buffer);
+		length = asprintf(&tmpBuff, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, DEBUGFORMAT1, "------------", "---", "------", "----");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
 		for (p = dbg_cl_header; p != NULL; p = p->next)
 		{
 			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlength(parameter->paramValue.stringValue)) == 0)
 			{
-				for (i = 0; i < p->nfds && p->fds[i] != socket_stream; i++)
+				for (index = 0; index < p->nfds && p->fds[index] != parameter->data2.socket; index++)
 				{
 					;
 				}
 				rv = 0;
-				asprintf(&buffer, DEBUGFORMAT2, p->path, p->tag & 0777, i < p->nfds ? "ON" : "OFF", p->help);
-				send(socket_stream, buffer, strlength(buffer), 0);
-				free(buffer);
+				length = asprintf(&tmpBuff, DEBUGFORMAT2, p->path, p->tag & 0777, index < p->nfds ? "ON" : "OFF", p->help);
+				if (length > 0 && tmpBuff)
+				{
+					send(parameter->data1.socket, tmpBuff, (int)length, 0);
+					free(tmpBuff);
+				}
+				else
+				{
+					errno = ENOMEM;
+					return -1;
+				}
+			}
+		}
+	}
+	else if (parameter->type1 == com_type_memstream && 
+		parameter->data1.mem_stream != NULL && 
+		parameter->type2 == com_type_socket &&
+		parameter->data2.socket != INVALID_SOCKET &&
+		parameter->paramType == com_param_type_string && 
+		parameter->paramValue.stringValue != NULL)
+	{
+		length = asprintf(&tmpBuff, DEBUGFORMAT1, "CATEGORY", "TAG", "STATUS", "HELP");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, DEBUGFORMAT1, "------------", "---", "------", "----");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		for (p = dbg_cl_header; p != NULL; p = p->next)
+		{
+			if (p->help && strncmp(p->path, parameter->paramValue.stringValue, strlength(parameter->paramValue.stringValue)) == 0)
+			{
+				for (index = 0; index < p->nfds && p->fds[index] != parameter->data2.socket; index++)
+				{
+					;
+				}
+				rv = 0;
+				length = asprintf(&tmpBuff, DEBUGFORMAT2, p->path, p->tag & 0777, index < p->nfds ? "ON" : "OFF", p->help);
+				if (length > 0 && tmpBuff)
+				{
+					write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+					free(tmpBuff);
+				}
+				else
+				{
+					errno = ENOMEM;
+					return -1;
+				}
 			}
 		}
 	}

@@ -588,6 +588,8 @@ void main_loop()
     uint32_t index = 0;
     uint32_t fd_index = 0;
     uint32_t pollable_count = 0;
+    uint32_t pollable_pos = 0;
+    uint32_t last_descriptor_count = 0;
     int fd_found = 0;
     MSG msg; 
     int prenfds = 0;
@@ -596,21 +598,26 @@ void main_loop()
     fpos_t std_in_pos = 0;
     fpos_t std_last_in_pos = 0;
     DWORD buffer_ready = 0;
+    DWORD firstLoop = 1;
 
     struct pollfd* pollable_fds = NULL;
 
     
 
     while (1) {
-        if (pollable_fds)
+        if (pollable_fds||firstLoop==1)
         {
+            firstLoop = 0;
             errno = 0;
-            if (pollable_count != number_of_filedescriptors)
+            if (last_descriptor_count != number_of_filedescriptors)
             {
+                last_descriptor_count = number_of_filedescriptors;
                 free(pollable_fds);
+                pollable_count = 0;
                 for (index = 0; index < number_of_filedescriptors; index++)
                 {
-                    if (fds[index].fd != 0 && fds[index].fd != INVALID_SOCKET)
+                    
+                    if (fds[index].fd > 0 && fds[index].fd != INVALID_SOCKET)
                     {
                         pollable_count++;
                     }
@@ -618,15 +625,23 @@ void main_loop()
                 pollable_fds = (struct pollfd*)malloc(sizeof(struct pollfd) * pollable_count);
                 if (pollable_fds)
                 {
-                    pollable_count = 0;
+                    pollable_pos = 0;
                     for (index = 0; index < number_of_filedescriptors; index++)
                     {
-                        if (fds[index].fd != 0 && fds[index].fd != INVALID_SOCKET)
+                        if (fds[index].fd > 0 && fds[index].fd != INVALID_SOCKET )
                         {
-                            pollable_fds[pollable_count].fd = fds[index].fd;
-                            pollable_fds[pollable_count].events = fds[index].events;
-                            pollable_fds[pollable_count].revents = fds[index].revents;
-                            pollable_count++;
+                            if (pollable_pos < pollable_count)
+                            {
+                                pollable_fds[pollable_pos].fd = fds[index].fd;
+                                pollable_fds[pollable_pos].events = fds[index].events;
+                                pollable_fds[pollable_pos].revents = 0;
+                                pollable_pos++;
+                            }
+                            else
+                            {
+                                fprintf(stderr, "Went Past the length of the pollable file descriptor buffer\n");
+                                continue;
+                            }
                         }
                     }
                 }
@@ -636,14 +651,17 @@ void main_loop()
                     break;
                 }
             }
+            if (!pollable_fds)
+            {
+                fprintf(stderr, "file descriptors is NULL\n");
+                break;
+            }
             n = WSAPoll(pollable_fds, pollable_count, 0);
             if (n < 0)
             {
-                if (errno != EINTR && errno != 0)
-                {
-                    strerror_s(errorbuff, sizeof(errorbuff), errno);
-                    printlog(LOG_WARNING, "poll %s %d", errorbuff, WSAGetLastError());
-                }
+                strerror_s(errorbuff, sizeof(errorbuff), errno);
+                printlog(LOG_WARNING, "poll %s %d", errorbuff, WSAGetLastError());
+                break;
             }
             else
             {

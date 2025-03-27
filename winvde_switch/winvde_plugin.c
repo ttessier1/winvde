@@ -50,6 +50,40 @@ int pluginlist(struct comparameter * parameter)
 		}
 		return rv;
 	}
+	else if (parameter->type1 == com_type_socket &&
+		parameter->data1.socket != INVALID_SOCKET &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL)
+	{
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "NAME", "HELP");
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------", "----");
+		for (plugin_struct = pluginh; plugin_struct != NULL; plugin_struct = plugin_struct->next)
+		{
+			if (strncmp(plugin_struct->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
+			{
+				printoutc(parameter->data1.file_descriptor, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				rv = 0;
+			}
+		}
+		return rv;
+	}
+	else if (parameter->type1 == com_type_memstream &&
+		parameter->data1.mem_stream != NULL &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue != NULL)
+	{
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "NAME", "HELP");
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------", "----");
+		for (plugin_struct = pluginh; plugin_struct != NULL; plugin_struct = plugin_struct->next)
+		{
+			if (strncmp(plugin_struct->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
+			{
+				printoutc(parameter->data1.file_descriptor, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				rv = 0;
+			}
+		}
+		return rv;
+	}
 	else
 	{
 		errno = EINVAL;

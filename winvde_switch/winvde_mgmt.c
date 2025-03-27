@@ -126,7 +126,7 @@ char* mgmt_socket = NULL;
 void mgmt_usage();
 int mgmt_parse_options(const int c, const char* optarg);
 int mgmt_init();
-void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data);
+int mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data);
 void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data);
 int handle_cmd(int type, SOCKET fd, char* inbuf);
 
@@ -224,7 +224,7 @@ int mgmt_init()
 	if (!DoDaemonize && !DoNoStdIn)
 	{
 		console_type = add_type(&mgmgt_module, 0);
-		add_fd(0, console_type, mgmgt_module.module_tag, NULL);
+		add_fd(INVALID_SOCKET, console_type, mgmgt_module.module_tag, NULL);
 		/* This file descriptor is a problem for WSAPoll*/
 	}
 
@@ -305,7 +305,7 @@ int mgmt_init()
 	return 0;
 }
 
-void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data)
+int mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_data)
 {
 	char buf[MAXCMD];
 	int n = 0;
@@ -324,7 +324,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 			{
 				strerror_s(errorbuff, sizeof(errorbuff), errno);
 				printlog(LOG_WARNING, "Reading from mgmt %s",errorbuff);
-				return;
+				return -1;
 			}
 		}
 		if (n == 0)
@@ -354,7 +354,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 			{
 				buf[n] = 0;
 			}
-			if (n > 0 && buf[n - 1] == '\n')
+			if (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r'))
 			{
 				buf[n - 1] = 0;
 			}
@@ -395,14 +395,14 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 		{
 			strerror_s(errorbuff,sizeof(errorbuff),errno);
 			printlog(LOG_WARNING, "mgmt accept %s", errorbuff);
-			return;
+			return -1;
 		}
 		if (ioctlsocket(new, FIONBIO, &one) == SOCKET_ERROR)
 		{
 			strerror_s(errorbuff, sizeof(errorbuff), errno);
 			printlog(LOG_WARNING, "mgmt fcntl - setting O_NONBLOCK %s", errorbuff);
 			closesocket(new);
-			return;
+			return -1;
 		}
 
 		add_fd(new, mgmt_data, mgmgt_module.module_tag, NULL);
@@ -411,7 +411,7 @@ void mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_da
 		send(new, buf, strlength(buf),0);
 		send(new, prompt, strlength(prompt),0);
 	}
-
+	return 0;
 }
 
 void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
@@ -445,9 +445,9 @@ int vde_logout(struct comparameter * parameter)
 	if (parameter->type1 == com_type_null && parameter->type2 == com_type_null && parameter->paramType == com_param_type_null)
 	{
 		printlog(LOG_WARNING, "Logout from mgmt command");
-		return -2;
+		return -1;
 	}
-	return -1;
+	return 0;
 }
 
 int vde_shutdown(struct comparameter* parameter)
@@ -468,12 +468,14 @@ int vde_shutdown(struct comparameter* parameter)
 
 int mgmt_showinfo(struct comparameter* parameter)
 {
+	char* tmpBuff = NULL;
+	size_t length;
 	if (parameter == NULL)
 	{
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_file )
+	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor!=NULL)
 	{
 		printoutc(parameter->data1.file_descriptor, header, PACKAGE_VERSION);
 		printoutc(parameter->data1.file_descriptor, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d", _getpid(),
@@ -482,6 +484,88 @@ int mgmt_showinfo(struct comparameter* parameter)
 		if (mgmt_socket)
 		{
 			printoutc(parameter->data1.file_descriptor, "mgmt %s perm 0%03o", mgmt_socket, mgmt_mode);
+		}
+	}
+	else if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET)
+	{
+		length = asprintf(&tmpBuff, header, PACKAGE_VERSION);
+		if (length && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d\n", _getpid(),
+			switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5],
+			qtime());
+		if (length && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "mgmt %s perm 0%03o\n", mgmt_socket, mgmt_mode);
+		if (mgmt_socket)
+		{
+			if (length && tmpBuff)
+			{
+				send(parameter->data1.socket, tmpBuff, (int)length, 0);
+				free(tmpBuff);
+			}
+			else
+			{
+				errno = ENOMEM;
+				return -1;
+			}
+		}
+	}
+	else if (parameter->type1 == com_type_memstream && parameter->data1.mem_stream != NULL)
+	{
+		length = asprintf(&tmpBuff, header, PACKAGE_VERSION);
+		if (length && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d\n", _getpid(),
+			switchmac[0], switchmac[1], switchmac[2], switchmac[3], switchmac[4], switchmac[5],
+			qtime());
+		if (length && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "mgmt %s perm 0%03o\n", mgmt_socket, mgmt_mode);
+		if (mgmt_socket)
+		{
+			if (length && tmpBuff)
+			{
+				write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+				free(tmpBuff);
+			}
+			else
+			{
+				errno = ENOMEM;
+				return -1;
+			}
 		}
 	}
 	return 0;
@@ -546,6 +630,8 @@ int help(struct comparameter* parameter)
 {
 	struct comlist* p=NULL;
 	size_t n = 0;
+	char* tmpBuff = NULL;
+	size_t length = 0;
 	if (!parameter)
 	{
 		errno = EINVAL;
@@ -556,9 +642,8 @@ int help(struct comparameter* parameter)
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_file && parameter->paramType==com_param_type_string)
+	if (parameter->type1 == com_type_file && parameter->paramType==com_param_type_string&& parameter->paramValue.stringValue!=NULL)
 	{
-		strlen(parameter->paramValue.stringValue);
 		printoutc(parameter->data1.file_descriptor, "%-18s %-15s %s", "COMMAND PATH", "SYNTAX", "HELP");
 		printoutc(parameter->data1.file_descriptor, "%-18s %-15s %s", "------------", "--------------", "------------");
 		for (p = clh; p != NULL; p = p->next)
@@ -566,6 +651,87 @@ int help(struct comparameter* parameter)
 			if (strncmp(p->path, parameter->paramValue.stringValue, n) == 0)
 			{
 				printoutc(parameter->data1.file_descriptor, "%-18s %-15s %s", p->path, p->syntax, p->help);
+			}
+		}
+	}
+	else if (parameter->type1 == com_type_socket && parameter->data1.socket!=INVALID_SOCKET && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		
+		length = asprintf(&tmpBuff, "%-18s %-15s %s\n", "COMMAND PATH", "SYNTAX", "HELP");
+		if (length>0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "%-18s %-15s %s\n", "------------", "--------------", "------------");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			return -1;
+		}
+		
+		
+		for (p = clh; p != NULL; p = p->next)
+		{
+			if (strncmp(p->path, parameter->paramValue.stringValue, n) == 0)
+			{
+				length = asprintf(&tmpBuff, "%-18s %-15s %s\n", p->path, p->syntax, p->help);
+				if (length > 0 && tmpBuff)
+				{
+					send(parameter->data1.socket, tmpBuff, (int)length, 0);
+					free(tmpBuff);
+				}
+				else
+				{
+					return -1;
+				}
+			}
+		}
+	}
+	else if (parameter->type1 == com_type_memstream && parameter->data1.mem_stream != NULL && parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL)
+	{
+		length = asprintf(&tmpBuff, "%-18s %-15s %s\n", "COMMAND PATH", "SYNTAX", "HELP");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "%-18s %-15s %s\n", "------------", "--------------", "------------");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			return -1;
+		}
+		for (p = clh; p != NULL; p = p->next)
+		{
+			if (strncmp(p->path, parameter->paramValue.stringValue, n) == 0)
+			{
+				length = asprintf(&tmpBuff, "%-18s %-15s %s\n", p->path, p->syntax, p->help);
+				if (length > 0 && tmpBuff)
+				{
+					write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+					free(tmpBuff);
+				}
+				else
+				{
+					return -1;
+				}
 			}
 		}
 	}
@@ -616,7 +782,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 					{
 						if (p->type & WITHFILE)
 						{
-							write_memorystream(memStream, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));
+							write_memorystream(memStream, "0000 DATA END WITH '.'\n", strlen("0000 DATA END WITH '.'\n"));
 							parameter.type1 = com_type_memstream;
 							parameter.data1.mem_stream = memStream;
 							parameter.type2 = com_type_socket;
@@ -638,7 +804,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 									rv = p->doit(&parameter); 
 								break;
 							}
-							write_memorystream(memStream, ".", strlen("."));
+							write_memorystream(memStream, ".\n", strlen(".\n"));
 						}
 						else
 						{
@@ -671,7 +837,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 				}
 				else if (p->type & WITHFILE)
 				{
-					write_memorystream(memStream, "0000 DATA END WITH '.'", strlen("0000 DATA END WITH '.'"));\
+					write_memorystream(memStream, "0000 DATA END WITH '.'\n", strlen("0000 DATA END WITH '.'\n"));
 					parameter.type1 = com_type_memstream;
 					parameter.data1.mem_stream = memStream;
 					parameter.type2 = com_type_null;
@@ -692,7 +858,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 						rv = p->doit(&parameter); 
 					break;
 					}
-					write_memorystream(memStream, ".", strlen("."));
+					write_memorystream(memStream, ".\n", strlen(".\n"));
 				}
 				else
 				{
@@ -719,7 +885,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 			}
 			if (rv == 0)
 			{
-				write_memorystream(memStream, "1000 Success", strlen("1000 Success"));
+				write_memorystream(memStream, "1000 Success\n", strlen("1000 Success\n"));
 			}
 			else if (rv > 0)
 			{
@@ -739,7 +905,6 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 				send(socketDescriptor, outbuf, (int)*outbufsize, 0);
 			}
 			close_memorystream(memStream);
-			free(outbuf);
 		}
 		else
 		{

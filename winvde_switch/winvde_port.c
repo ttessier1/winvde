@@ -18,7 +18,8 @@
 #include "winvde_event.h"
 #include "winvde_user.h"
 #include "winvde_packetq.h"
-
+#include "winvde_printfunc.h"
+#include "winvde_memorystream.h"
 
 
 #define D_PACKET 01000
@@ -201,12 +202,9 @@ void port_init(int init_num_ports)
 
 int port_showinfo(struct comparameter * parameter)
 {
+	char* tmpBuff = NULL;
+	size_t length = 0;
 	if (!parameter)
-	{
-		errno = EINVAL;
-		return -1;
-	}
-	if(parameter->type1 != com_type_file|| parameter->data1.file_descriptor==NULL)
 	{
 		errno = EINVAL;
 		return -1;
@@ -222,6 +220,83 @@ int port_showinfo(struct comparameter * parameter)
 #endif
 #ifdef VDE_PQ2
 		printoutc(parameter->data1.file_descriptor, "default length of port packet queues: %d", stdqlen);
+#endif
+	}
+	else if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET)
+	{
+		length = asprintf(&tmpBuff, "Numports=%d\n", numports);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		length = asprintf(&tmpBuff, "HUB=%s\n", (pflag & HUB_TAG) ? "true" : "false");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		
+#ifdef PORTCOUNTERS
+		length = asprintf(&tmpBuff, "counters=true\n");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+#else
+		length = asprintf(&tmpBuff, "counters=true\n");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+#endif
+#ifdef VDE_PQ2
+		length = asprintf(&tmpBuff, "default length of port packet queues: %d\n", stdqlen);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+#endif
+	}
+	else if (parameter->type1 == com_type_memstream && parameter->data1.mem_stream != NULL)
+	{
+		length = asprintf(&tmpBuff, "Numports=%d\n", numports);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		length = asprintf(&tmpBuff, "HUB=%s\n", (pflag & HUB_TAG) ? "true" : "false");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+#ifdef PORTCOUNTERS
+		length = asprintf(&tmpBuff, "counters=true\n");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+#else
+		length = asprintf(&tmpBuff, "counters=false\n");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+#endif
+#ifdef VDE_PQ2
+		length = asprintf(&tmpBuff, "default length of port packet queues: %d\n", stdqlen);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
 #endif
 	}
 	return 0;
