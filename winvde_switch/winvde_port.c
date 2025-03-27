@@ -522,7 +522,7 @@ int portcreate(struct comparameter* parameter)
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_unsigned_int)
+	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
 	{
 		if (parameter->paramValue.intValue < 0 || parameter->paramValue.intValue >= numports)
 		{
@@ -778,12 +778,11 @@ int print_ptable(struct comparameter * parameter)
 		errno = EINVAL;
 		return - 1;
 	}
-	if (parameter->type1 != com_type_file || parameter->data1.file_descriptor == NULL)
-	{
-		errno = EINVAL;
-		return -1;
-	}
-	if(parameter->paramType == com_param_type_string && parameter->paramValue.stringValue != NULL )
+	if(
+		parameter->type1 == com_type_memstream &&
+		parameter->data1.mem_stream != NULL &&
+		parameter->paramType == com_param_type_string && 
+		parameter->paramValue.stringValue != NULL )
 	{
 		index = atoi(parameter->paramValue.stringValue);
 		if (index < 0 || index >= numports)
@@ -792,16 +791,24 @@ int print_ptable(struct comparameter * parameter)
 		}
 		else 
 		{
-			return print_port(parameter->data1.file_descriptor, index, 0);
+			return print_port(parameter->data1.mem_stream, index, 0);
 		}
 	}
-	else
+	else if (parameter->type1 == com_type_memstream &&
+		parameter->data1.mem_stream != NULL &&
+		parameter->paramType == com_param_type_string &&
+		parameter->paramValue.stringValue == NULL)
 	{
 		for (index = 0; index < numports; index++)
 		{
-			print_port(parameter->data1.file_descriptor, index, 0);
+			print_port(parameter->data1.mem_stream, index, 0);
 		}
 		return 0;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
 	}
 }
 
@@ -815,7 +822,7 @@ int print_ptableall(struct comparameter * parameter)
 		return -1;
 	}
 	if (
-		parameter->type1 == com_type_file &&
+		parameter->type1 == com_type_memstream &&
 		parameter->paramType == com_param_type_string &&
 		parameter->paramValue.stringValue != NULL)
 	{
@@ -828,14 +835,14 @@ int print_ptableall(struct comparameter * parameter)
 			}
 			else
 			{
-				return print_port(parameter->data1.file_descriptor, index, 1);
+				return print_port(parameter->data1.mem_stream, index, 1);
 			}
 		}
 		else
 		{
 			for (index = 0; index < numports; index++)
 			{
-				print_port(parameter->data1.file_descriptor, index, 1);
+				print_port(parameter->data1.mem_stream, index, 1);
 			}
 			return 0;
 		}
@@ -1215,27 +1222,91 @@ int alloc_port(unsigned int portno)
 	}
 }
 
-int print_port(FILE* fd, int index, int inclinactive)
+int print_port(struct _memory_file* memstream, int index, int inclinactive)
 {
+	char* tmpBuff = NULL;
+	size_t length = 0;
 	struct endpoint* ep;
 	if (portv[index] != NULL && (inclinactive || portv[index]->ep != NULL)) {
-		printoutc(fd, "Port %04d untagged_vlan=%04d %sACTIVE - %sUnnamed Allocatable",
+
+		length = asprintf(&tmpBuff,"Port %04d untagged_vlan=%04d %sACTIVE - %sUnnamed Allocatable\n",
 			index, portv[index]->vlanuntag,
 			portv[index]->ep ? "" : "IN",
 			(portv[index]->flag & NOTINPOOL) ? "NOT " : "");
-		printoutc(fd, " Current User: %s Access Control: (User: %s - Group: %s)",
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(memstream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, " Current User: %s Access Control: (User: %s - Group: %s)\n",
 			port_getuser(portv[index]->curuser),
 			port_getuser(portv[index]->user),
 			port_getgroup(portv[index]->group));
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(memstream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+
 #ifdef PORTCOUNTERS
-		printoutc(fd, " IN:  pkts %10lld          bytes %20lld", portv[i]->pktsin, portv[i]->bytesin);
-		printoutc(fd, " OUT: pkts %10lld          bytes %20lld", portv[i]->pktsout, portv[i]->bytesout);
+		length = asprintf(&tmpBuff," IN:  pkts %10lld          bytes %20lld\n", portv[i]->pktsin, portv[i]->bytesin);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(memstream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, " OUT: pkts %10lld          bytes %20lld\n", portv[i]->pktsout, portv[i]->bytesout);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(memstream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
 #endif
 		for (ep = portv[index]->ep; ep != NULL; ep = ep->next) {
-			printoutc(fd, "  -- endpoint ID %04d module %-12s: %s", ep->fd_ctl,
+			length = asprintf(&tmpBuff, "  -- endpoint ID %04d module %-12s: %s", ep->fd_ctl,
 				portv[index]->ms->modname, (ep->descr) ? ep->descr : "no endpoint description");
+			if (length > 0 && tmpBuff)
+			{
+				write_memorystream(memstream, tmpBuff, length);
+				free(tmpBuff);
+			}
+			else
+			{
+				errno = ENOMEM;
+				return -1;
+			}
 #ifdef VDE_PQ2
-			printoutc(fd, "              unsent packets: %d max %d", ep->vdepq_count, ep->vdepq_max);
+			length = asprintf(&tmpBuff, "              unsent packets: %d max %d", ep->vdepq_count, ep->vdepq_max);
+			if (length > 0 && tmpBuff)
+			{
+				write_memorystream(memstream, tmpBuff, length);
+				free(tmpBuff);
+			}
+			else
+			{
+				errno = ENOMEM;
+				return -1;
+			}
 #endif
 		}
 		return 0;

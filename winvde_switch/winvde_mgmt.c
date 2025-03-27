@@ -934,7 +934,7 @@ void loadrcfile(void)
 		char path[MAX_PATH];
 		char home[MAX_PATH];
 		getenv_s(&size, home, sizeof(home), "USERPROFILE");
-		snprintf(path, MAX_PATH, "%s\\.vde2\\vde_switch.rc", home);
+		snprintf(path, MAX_PATH, "%s\\.winvde2\\winvde_switch.rc", home);
 		if (_access(path, R_OK) == 0)
 		{
 			parameter.type1 = com_type_socket;

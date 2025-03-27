@@ -7,6 +7,8 @@
 #include "winvde_plugin.h"
 #include "winvde_comlist.h"
 #include "winvde_output.h"
+#include "winvde_printfunc.h"
+#include "winvde_memorystream.h"
 
 #if defined(VDEPLUGIN)
 
@@ -24,7 +26,9 @@ struct plugin** plugint = &pluginh;
 //int pluginlist(FILE* f, char* arg)
 int pluginlist(struct comparameter * parameter)
 {
-#define PLUGINFMT "%-22s %s"
+	char* tmpBuff = NULL;
+	size_t length = 0;
+#define PLUGINFMT "%-22s %s\n"
 	struct plugin* plugin_struct;
 	int rv = ENOENT;
 	if (!parameter)
@@ -55,13 +59,44 @@ int pluginlist(struct comparameter * parameter)
 		parameter->paramType == com_param_type_string &&
 		parameter->paramValue.stringValue != NULL)
 	{
-		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "NAME", "HELP");
-		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------", "----");
+		length = asprintf(&tmpBuff, PLUGINFMT, "NAME", "HELP");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length,0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, PLUGINFMT, "------------", "----");
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length,0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+
 		for (plugin_struct = pluginh; plugin_struct != NULL; plugin_struct = plugin_struct->next)
 		{
 			if (strncmp(plugin_struct->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
 			{
-				printoutc(parameter->data1.file_descriptor, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				length = asprintf(&tmpBuff, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				if (length > 0 && tmpBuff)
+				{
+					send(parameter->data1.socket, tmpBuff, (int)length,0);
+					free(tmpBuff);
+				}
+				else
+				{
+					errno = ENOMEM;
+					return -1;
+				}
 				rv = 0;
 			}
 		}
@@ -72,13 +107,44 @@ int pluginlist(struct comparameter * parameter)
 		parameter->paramType == com_param_type_string &&
 		parameter->paramValue.stringValue != NULL)
 	{
-		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "NAME", "HELP");
-		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------", "----");
+		length = asprintf(&tmpBuff, PLUGINFMT, "NAME", "HELP");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, PLUGINFMT, "------------", "----");
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		
 		for (plugin_struct = pluginh; plugin_struct != NULL; plugin_struct = plugin_struct->next)
 		{
 			if (strncmp(plugin_struct->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
 			{
-				printoutc(parameter->data1.file_descriptor, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				length = asprintf(&tmpBuff, PLUGINFMT, plugin_struct->name, plugin_struct->help);
+				if (length > 0 && tmpBuff)
+				{
+					write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+					free(tmpBuff);
+				}
+				else
+				{
+					errno = ENOMEM;
+					return -1;
+				}
 				rv = 0;
 			}
 		}

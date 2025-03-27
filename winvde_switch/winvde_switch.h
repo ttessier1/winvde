@@ -3,7 +3,7 @@
 #include <winsock2.h>
 
 #define PACKAGE_BUGREPORT "-no big report-"
-#define STDRCFILE "%USERPROFILE%\\.vde2\\vde_switch.rc"
+#define STDRCFILE "%USERPROFILE%\\.winvde2\\winvde_switch.rc"
 #define ETH_ALEN 6
 #define INIT_HASH_SIZE 128
 #define DEFAULT_PRIORITY 0x8000

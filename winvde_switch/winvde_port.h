@@ -1,6 +1,7 @@
 #pragma once
 #include <WinSock2.h>
 #include "winvde_switch.h"
+#include "winvde_memorystream.h"
 
 #define P_GETFLAG 0
 #define P_SETFLAG 1
@@ -85,7 +86,7 @@ void vlanprintelem(int vlan, FILE* fd);
 int vlancreate_nocheck(int vlan);
 int portflag(int op, int f);
 int alloc_port(unsigned int portno);
-int print_port(FILE* fd, int index, int inclinactive);
+int print_port(struct _memory_file* memstream, int index, int inclinactive);
 void free_port(unsigned int portno);
 int close_ep_port_fd(uint32_t portno, SOCKET fd_ctl);
 void vlanprintactive(int vlan, FILE* fd);
