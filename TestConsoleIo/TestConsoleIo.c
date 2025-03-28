@@ -736,6 +736,7 @@ int HandleCommand(const struct command_parameter* command)
                     }
                     return 0;
                 }
+                return -1;
             }
             
         }
