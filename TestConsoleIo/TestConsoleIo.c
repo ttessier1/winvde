@@ -299,16 +299,25 @@ int main(const int argc, const char ** argv)
                     {
                         ptr = ptr->next;
                     }
-                    if (ptr->command)
+                    if (ptr && ptr->command)
                     {
                         memcpy(std_input_buffer, ptr->command, ptr->length);
                         std_input_length = (uint16_t)ptr->length;
                         std_input_pos = (uint16_t)ptr->length;
                         RestoreCursorPos();
                         SaveCursorPos();
-                        fprintf(stdout, "%.*s", 80 - strlen(prompt), "                                                                              ");
+                        fprintf(stdout, "%.*s",(int) 80 - strlen(prompt), "                                                                              ");
                         RestoreCursorPos();
                         fprintf(stdout,"%.*s",std_input_length,std_input_buffer);
+                    }
+                    else
+                    {
+                        RestoreCursorPos();
+                        SaveCursorPos();
+                        fprintf(stdout, "%.*s", (int)80 - strlen(prompt), "                                                                              ");
+                        RestoreCursorPos();
+                        std_input_length = 0;
+                        std_input_pos = 0;
                     }
                     continue;
                     break;
@@ -320,6 +329,14 @@ int main(const int argc, const char ** argv)
                         if (ptr == NULL)
                         {
                             continue;
+                        }
+                        else
+                        {
+                            // go to the end of the list
+                            while (ptr->next)
+                            {
+                                ptr = ptr->next;
+                            }
                         }
                     }
                     else
@@ -333,9 +350,18 @@ int main(const int argc, const char ** argv)
                         std_input_pos = (uint16_t)ptr->length;
                         RestoreCursorPos();
                         SaveCursorPos();
-                        fprintf(stdout, "%.*s", 80 - strlen(prompt), "                                                                              ");
+                        fprintf(stdout, "%.*s", (int)80 - strlen(prompt), "                                                                              ");
                         RestoreCursorPos();
                         fprintf(stdout,"%.*s", std_input_length, std_input_buffer);
+                    }
+                    else
+                    {
+                        RestoreCursorPos();
+                        SaveCursorPos();
+                        fprintf(stdout, "%.*s", (int)80 - strlen(prompt), "                                                                              ");
+                        RestoreCursorPos();
+                        std_input_length = 0;
+                        std_input_pos = 0;
                     }
                     continue;
                     break;
