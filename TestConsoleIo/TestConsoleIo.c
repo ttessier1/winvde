@@ -19,6 +19,8 @@
 
 #define STD_INPUT_BUFF_SIZE 1024
 
+#define MAX_HISTORY 3
+
 #define MAXSYMLINKS 10
 
 
@@ -436,6 +438,7 @@ int main(const int argc, const char ** argv)
                         {
                             fprintf(stdout, "\033[32m%s\033[0m", prompt);
                             SaveCursorPos();
+                            std_input_buffer[std_input_length + 1] = '\0';
                             addCommandHistory(&cmd_history, std_input_buffer, std_input_length);
                             std_input_pos = 0;
                             std_input_length = 0;
@@ -1170,6 +1173,7 @@ size_t termReadLink(const char* path, char* buffer, size_t bufsize)
 int addCommandHistory(struct command_history** cmd_history, char* command, size_t length)
 {
     struct command_history* ptr = NULL;
+    struct command_history* save = NULL;
     if (!cmd_history || !command || length <= 0)
     {
         errno = EINVAL;
@@ -1179,14 +1183,17 @@ int addCommandHistory(struct command_history** cmd_history, char* command, size_
     ptr = *cmd_history;
     if (ptr)
     {
-        while (ptr->next)
+        save = ptr;
+        while (ptr)
         {
             if (ptr->checksum == hash)
             {
                 return 0;
             }
+            save = ptr;
             ptr = ptr->next;
         }
+        ptr = save;
         ptr->next = (struct command_history*)malloc(sizeof(struct command_history));
         if (!ptr->next)
         {
@@ -1220,7 +1227,7 @@ int addCommandHistory(struct command_history** cmd_history, char* command, size_
     ptr->checksum = hash;
     ptr->lastUsed = time(NULL);
     command_history_count++;
-    if (command_history_count > 10)
+    if (command_history_count > MAX_HISTORY)
     {
         deleteOldestHistory(cmd_history);
     }
@@ -1251,12 +1258,22 @@ int deleteOldestHistory(struct command_history** cmd_history)
         if (oldestHistory)
         {
             ptr = oldestHistory;
-            ptr->prev->next = ptr->next;
-            ptr->next->prev = ptr->prev;
+            if (ptr->prev)
+            {
+                ptr->prev->next = ptr->next;
+            }
+            if (ptr->next)
+            {
+                ptr->next->prev = ptr->prev;
+            }
             if (ptr->command)
             {
                 free(ptr->command);
                 ptr->command = NULL;
+            }
+            if (*cmd_history == ptr)
+            {
+                *cmd_history = ptr->next;
             }
             free(ptr);
         }
@@ -1274,7 +1291,7 @@ uint32_t calculateHash(char * command, size_t length)
     if (command != NULL)
     {
         ptr = command;
-        while (*ptr != '\0')
+        while (index<length)
         {
             index++;
             value += index * (*ptr);
