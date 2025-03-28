@@ -60,6 +60,7 @@ struct winvde_stat {
 struct command_parameter
 {
     char* argument;
+    size_t length;
     struct command_parameter* next;
 };
 
@@ -89,6 +90,7 @@ char  prompt[] = "winvde$:";
 #define COMMAND_CAT "cat"
 #define COMMAND_CWD "getcwd"
 #define COMMAND_HELP "help"
+#define COMMAND_ECHO "echo"
 
 #define COMMAND_EXIT_LENGTH strlen(COMMAND_EXIT)
 #define COMMAND_CLS_LENGTH strlen(COMMAND_CLS)
@@ -96,6 +98,7 @@ char  prompt[] = "winvde$:";
 #define COMMAND_CAT_LENGTH strlen(COMMAND_CAT)
 #define COMMAND_CWD_LENGTH strlen(COMMAND_CWD)
 #define COMMAND_HELP_LENGTH strlen(COMMAND_HELP)
+#define COMMAND_ECHO_LENGTH strlen(COMMAND_ECHO)
 
 
 uint8_t insertMode = 0;
@@ -123,6 +126,8 @@ int addCommandHistory(struct command_history** cmd_history,char * std_input_buff
 int deleteOldestHistory(struct command_history** cmd_history);
 void cleanHistory(struct command_history** cmd_history);
 uint32_t calculateHash(char* command, size_t length);
+int CollapseArgumentsToString(const struct command_parameter* argument, char ** value);
+int strlength(const char* string);
 
 int main(const int argc, const char ** argv)
 {
@@ -308,7 +313,7 @@ int main(const int argc, const char ** argv)
                         std_input_pos = (uint16_t)ptr->length;
                         RestoreCursorPos();
                         SaveCursorPos();
-                        fprintf(stdout, "%.*s",(int) 80 - strlen(prompt), "                                                                              ");
+                        fprintf(stdout, "%.*s",(int)(80 - strlength(prompt)), "                                                                              ");
                         RestoreCursorPos();
                         fprintf(stdout,"%.*s",std_input_length,std_input_buffer);
                     }
@@ -316,7 +321,7 @@ int main(const int argc, const char ** argv)
                     {
                         RestoreCursorPos();
                         SaveCursorPos();
-                        fprintf(stdout, "%.*s", (int)80 - strlen(prompt), "                                                                              ");
+                        fprintf(stdout, "%.*s", (int)(80 - strlength(prompt)), "                                                                              ");
                         RestoreCursorPos();
                         std_input_length = 0;
                         std_input_pos = 0;
@@ -352,7 +357,7 @@ int main(const int argc, const char ** argv)
                         std_input_pos = (uint16_t)ptr->length;
                         RestoreCursorPos();
                         SaveCursorPos();
-                        fprintf(stdout, "%.*s", (int)80 - strlen(prompt), "                                                                              ");
+                        fprintf(stdout, "%.*s", (int)80 - strlength(prompt), "                                                                              ");
                         RestoreCursorPos();
                         fprintf(stdout,"%.*s", std_input_length, std_input_buffer);
                     }
@@ -360,7 +365,7 @@ int main(const int argc, const char ** argv)
                     {
                         RestoreCursorPos();
                         SaveCursorPos();
-                        fprintf(stdout, "%.*s", (int)80 - strlen(prompt), "                                                                              ");
+                        fprintf(stdout, "%.*s", (int)80 - strlength(prompt), "                                                                              ");
                         RestoreCursorPos();
                         std_input_length = 0;
                         std_input_pos = 0;
@@ -562,6 +567,7 @@ int HandleCommand(const struct command_parameter* command)
     size_t par_length = 0;
     size_t command_length = 0;
     char* tmpBuff = NULL;
+    char* collapsedString = NULL;
     char resolved[MAX_PATH];
     HANDLE findHandle=INVALID_HANDLE_VALUE;
     WIN32_FIND_DATAA findData;
@@ -721,6 +727,7 @@ int HandleCommand(const struct command_parameter* command)
                 fprintf(stderr, COMMAND_HELP1, COMMAND_DIR, "[path]", "give a relative directory listing");
                 fprintf(stderr, COMMAND_HELP1, COMMAND_CAT, "[path]", "output a file to screen");
                 fprintf(stderr, COMMAND_HELP1, COMMAND_CWD, "", "display the current path");
+                fprintf(stderr, COMMAND_HELP1, COMMAND_ECHO, "[string]", "display the string");
                 fprintf(stderr, COMMAND_HELP1, COMMAND_HELP, "", "display help");
                 return 0;
             }
@@ -739,6 +746,32 @@ int HandleCommand(const struct command_parameter* command)
                 return -1;
             }
             
+        }
+        command_length = COMMAND_ECHO_LENGTH;
+        if (memcmp(command->argument, COMMAND_ECHO, min(par_length, command_length)) == 0 && par_length == command_length)
+        {
+            if (command->next == NULL)
+            {
+                fprintf(stdout,"\n");
+            }
+            else
+            {
+                argument = command->next;
+                if (CollapseArgumentsToString(argument, &collapsedString) == 0 && collapsedString!=NULL)
+                {
+                    fprintf(stdout, "%s\n", collapsedString);
+                    free(collapsedString);
+                    return 0;
+                }
+                else
+                {
+                    fprintf(stderr, "Failed to collapse the string:%d\n",errno);
+                    return -1;
+                }
+            }
+            
+            
+            return 0;
         }
         fprintf(stderr, "Invalid Command\n");
         return -1;
@@ -796,6 +829,7 @@ int ParseCommand(const char* line, size_t length, struct command_parameter ** co
                 return -1;
             }
             strncpy_s(ptr->argument, (endPtr - startPtr)+1,startPtr, endPtr - startPtr);
+            ptr->length = (endPtr - startPtr);
             ptr->next = (struct command_parameter*)malloc(sizeof(struct command_parameter));
             if (!ptr->next)
             {
@@ -847,6 +881,7 @@ int ParseCommand(const char* line, size_t length, struct command_parameter ** co
             return -1;
         }
         strncpy_s(ptr->argument, (endPtr - startPtr)+1,startPtr, endPtr - startPtr);
+        ptr->length = (endPtr - startPtr);
     }
     
     return 0;
@@ -1322,4 +1357,95 @@ void cleanHistory(struct command_history** cmd_history)
             ptr = save;
         }
     }
+}
+
+int CollapseArgumentsToString(const struct command_parameter* argument, char** value)
+{
+    const struct command_parameter* ptr = NULL;
+    size_t length = 0 ;
+    size_t copy_length = 0;
+    char* valuePtr = NULL;
+    if (!argument || !value)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+    ptr = argument;
+    while (ptr)
+    {
+        if (ptr->argument)
+        {
+            length += strlen(ptr->argument) ;
+            if (ptr->next)
+            {
+                // account for space character
+                length++;
+            }
+        }
+        else
+        {
+            length++; // add a space on a null argument
+        }
+        ptr = ptr->next;
+    }
+    *value = malloc(length + 1);
+    if ((*value) == NULL)
+    {
+        errno = ENOMEM;
+        return -1;
+    }
+    valuePtr = *value;
+    ptr = argument;
+    while (ptr && copy_length<=length)
+    {
+        if (ptr->argument)
+        {
+            strncpy_s(valuePtr, ptr->length+1,ptr->argument, ptr->length);
+            valuePtr+= ptr->length;
+            copy_length += ptr->length;
+            if (ptr->next)
+            {
+                // account for space character
+                *valuePtr = ' ';
+                valuePtr++;
+                copy_length++;
+            }
+            else
+            {
+                *valuePtr = '\0';
+            }
+        }
+        else
+        {
+            *valuePtr = ' ';
+            valuePtr++;
+            copy_length++;
+        }
+        ptr = ptr->next;
+    }
+    return 0;
+}
+
+int strlength(const char* string)
+{
+    const char* ptr = NULL;
+    int length = 0;
+    if (!string)
+    {
+        // a zero length string will be better than all of memory -1
+        errno = EINVAL;
+        return length;
+    }
+    ptr = string;
+    while (*ptr != '\0')
+    {
+        ptr++;
+        length++;
+        if (length < 0)
+        {
+            // strlength does not handle strings larger than MAX_INT
+            return 0;
+        }
+    }
+    return length;
 }
