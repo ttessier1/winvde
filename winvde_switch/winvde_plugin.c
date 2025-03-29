@@ -229,21 +229,38 @@ int pluginadd(struct comparameter * parameter)
 		parameter->paramValue.stringValue != NULL
 	)
 	{
-		if ((handle = plugin_dlopen(parameter->paramValue.stringValue)) != INVALID_HANDLE_VALUE)
+		if ((handle = plugin_dlopen(parameter->paramValue.stringValue)) != NULL)
 		{
 			plugin_struct = (struct plugin*)GetProcAddress(handle, "winvde_plugin_data");
 			if (plugin_struct != NULL)
 			{
-				if (plugin_struct->handle != NULL)
-				{ /* this dyn library is already loaded*/
+				if (strstr(parameter->paramValue.stringValue, "winvde_") == NULL)
+				{
+					fprintf(stderr, "Plugin name does not match plugin name expectation\n");
 					FreeLibrary(handle);
-					rv = EEXIST;
+					errno = EINVAL;
+					rv = EINVAL;
+				}
+				if (strcmp(plugin_struct->name, parameter->paramValue.stringValue) != 0)
+				{
+					fprintf(stderr, "Plugin name does not match plugin name requested\n");
+					FreeLibrary(handle);
+					errno = EINVAL;
+					rv = EINVAL;
 				}
 				else
 				{
-					addplugin(plugin_struct);
-					plugin_struct->handle = handle;
-					rv = 0;
+					if (plugin_struct->handle != NULL)
+					{ /* this dyn library is already loaded*/
+						FreeLibrary(handle);
+						rv = EEXIST;
+					}
+					else
+					{
+						addplugin(plugin_struct);
+						plugin_struct->handle = handle;
+						rv = 0;
+					}
 				}
 			}
 			else
@@ -336,19 +353,19 @@ void delplugin(struct plugin* cl)
 
 int TRY_DLOPEN(char* testpath, int tplen, char* fmt, ...)
 {
-	HANDLE handle = INVALID_HANDLE_VALUE;
+	HANDLE handle = NULL;
 	va_list args;
 
 	va_start(args, fmt);
 	vsnprintf(testpath, tplen, fmt, args);
 	va_end(args);
 	handle = LoadLibraryA(testpath);
-	if (handle != INVALID_HANDLE_VALUE)
+	if (handle != NULL)
 	{
 		free(testpath);
 		return handle;
 	}
-	return INVALID_HANDLE_VALUE;
+	return NULL;
 }
 
 #endif
