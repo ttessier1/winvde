@@ -102,9 +102,9 @@ char  prompt[] = "winvde$:";
 
 
 uint8_t insertMode = 0;
-uint8_t DoLoop = 1;
 uint8_t bufferReady = 0;
 uint16_t command_history_count = 0;
+uint8_t DoLoop = 1;
 
 void SaveCursorPos();
 void RestoreCursorPos();

@@ -133,12 +133,23 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="winvde_cmdhist.c" />
+    <ClCompile Include="winvde_cmdparam.c" />
+    <ClCompile Include="winvde_confuncs.c" />
+    <ClCompile Include="winvde_pathfuncs.c" />
     <ClCompile Include="winvde_term.c" />
+    <ClCompile Include="winvde_termkeys.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="winvde_cmdhist.h" />
+    <ClInclude Include="winvde_cmdparam.h" />
+    <ClInclude Include="winvde_confuncs.h" />
     <ClInclude Include="winvde_hist.h" />
     <ClInclude Include="winvde_memorystream.h" />
+    <ClInclude Include="winvde_pathfuncs.h" />
     <ClInclude Include="winvde_printfunc.h" />
+    <ClInclude Include="winvde_term.h" />
+    <ClInclude Include="winvde_termkeys.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

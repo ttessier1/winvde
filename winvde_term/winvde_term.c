@@ -13,21 +13,25 @@
 #include "winvde_hist.h"
 #include "winvde_memorystream.h"
 #include "winvde_printfunc.h"
+#include "winvde_termkeys.h"
+#include "winvde_confuncs.h"
+#include "winvde_cmdhist.h"
 
 #pragma comment(lib,"ws2_32.lib")
 #pragma comment(lib,"winvde_hist.lib")
 
 char* prompt;
 
+uint8_t DoLoop = 1;
+
 void cleanup(void);
 void sig_handler(int sig);
 char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock);
 void setsighandlers();
 
-#define BUFFER_SIZE 1024
+int SetupKeyHandlers();
 
-int std_input_pos;
-char std_input_buffer[BUFFER_SIZE];
+#define BUFFER_SIZE 1024
 
 char errorbuff[BUFFER_SIZE];
 
@@ -44,7 +48,7 @@ int main(const int argc, const char** argv)
 	int sel = 0;
 
 	int rv;
-	int buffer_ready = 0;
+	//int buffer_ready = 0;
 	struct vdehiststat* vdehst=NULL;
 
 	if(WSAStartup(MAKEWORD(2, 2), &wsaData) == SOCKET_ERROR)
@@ -52,6 +56,9 @@ int main(const int argc, const char** argv)
 		fprintf(stderr, "Failed to startup sockets:%d\n", WSAGetLastError());
 		exit(0);
 	}
+
+	SetupKeyHandlers();
+
 	setsighandlers();
 	//tcgetattr(STD_INPUT_HANDLE, &tiop);
 	atexit(cleanup);
@@ -93,8 +100,10 @@ int main(const int argc, const char** argv)
 		goto CleanUp;
 	}
 	vdehst = vdehist_new(_fileno(stdout), serverSocket);
-	fprintf(stdout, "%.*s\n", (int)strlen(prompt) + 1, prompt);
-	while (1) {
+	//fprintf(stdout, "%.*s\n", (int)strlen(prompt) + 1, prompt);
+	SaveCursorPos();
+	fprintf(stdout, "\033[32m%.*s\033[0m", (int)strlen(prompt) + 1, prompt);
+	while (DoLoop) {
 
 		sel = WSAPoll(wsaPollFD, 2, 0);
 		if (sel < 0)
@@ -102,8 +111,13 @@ int main(const int argc, const char** argv)
 			fprintf(stderr, "Failed to poll:%d\n", WSAGetLastError());
 			break;
 		}
+		if (DoKbHit() != 0)
+		{
 
-		if (_kbhit())
+			fprintf(stderr, "Failed to check key press\n");
+			break;
+		}
+		/*if (_kbhit())
 		{
 			std_input_buffer[std_input_pos] = _getche();
 			if (std_input_buffer[std_input_pos] == '\n' || std_input_buffer[std_input_pos] == '\r')
@@ -141,7 +155,7 @@ int main(const int argc, const char** argv)
 					std_input_pos++;
 				}
 			}
-		}
+		}*/
 		if (sel > 0)
 		{
 			if (wsaPollFD[0].revents & POLLIN)
@@ -150,16 +164,23 @@ int main(const int argc, const char** argv)
 				{
 					goto CleanUp;
 				}
+				SaveCursorPos();
 			}
-			if (wsaPollFD[1].revents & POLLOUT && buffer_ready == 1)
+			if (wsaPollFD[1].revents & POLLOUT && bufferReady == 1)
 			{
 
 				if (vdehist_term_to_mgmt(vdehst, std_input_buffer, std_input_pos) != 0)
 				{
 					goto CleanUp;
 				}
-				buffer_ready = 0;
+				
+				fprintf(stdout, "\033[32m%.*s\033[0m", (int)strlen(prompt) + 1, prompt);
+				SaveCursorPos();
+				std_input_buffer[std_input_length + 1] = '\0';
+				addCommandHistory(&cmd_history, std_input_buffer, std_input_length);
 				std_input_pos = 0;
+				std_input_length = 0;
+				bufferReady = 0;
 			}
 			if ((wsaPollFD[0].revents & POLLHUP) ||
 				(wsaPollFD[1].revents & POLLHUP) )
@@ -336,4 +357,31 @@ static char* copy_header_prompt(SOCKET vdefd, int termfd, const char* sock)
 		wsaPollFD = NULL;
 	}
 	return NULL;
+}
+
+int SetupKeyHandlers()
+{
+	AttachKeyHandler(NUMPAD_0_KEY,ToggleInsert);
+
+	AttachKeyHandler(NUMPAD_LEFT_KEY, MoveCursorPositionLeft);
+	AttachKeyHandler(NUMPAD_RIGHT_KEY, MoveCursorPositionRight);
+
+	AttachKeyHandler(NUMPAD_UP_KEY, CommandHistUp);
+	AttachKeyHandler(NUMPAD_DOWN_KEY, CommandHistDown);
+
+	AttachKeyHandler(NUMPAD_PGUP_KEY, ScrollUp);
+	AttachKeyHandler(NUMPAD_PGDOWN_KEY, ScrollDown);
+	
+	AttachKeyHandler(KEYBOARD_INSERT, ToggleInsert);
+	
+	AttachKeyHandler(KEYBOARD_LEFT, MoveCursorPositionLeft);
+	AttachKeyHandler(KEYBOARD_RIGHT, MoveCursorPositionRight);
+	
+	AttachKeyHandler(KEYBOARD_UP, CommandHistUp);
+	AttachKeyHandler(KEYBOARD_DOWN, CommandHistDown);
+
+	AttachKeyHandler(KEYBOARD_PGUP, ScrollUp);
+	AttachKeyHandler(KEYBOARD_PGDWN, ScrollDown);
+
+	return 0;
 }

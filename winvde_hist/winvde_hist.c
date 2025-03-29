@@ -332,7 +332,7 @@ void redraw_line(struct vdehiststat* st, int prompt_too)
 	{
 		if (prompt_too)
 		{
-			bufsize2 = asprintf(&buff2, "%s%s", prompt, st->linebuf);
+			bufsize2 = asprintf(&buff2, "\033[32m%.*s%s\033[0m", strlen(prompt),prompt, st->linebuf);
 			if (bufsize2 > 0)
 			{
 				write_memorystream(ms, buff2,bufsize2);
@@ -342,7 +342,7 @@ void redraw_line(struct vdehiststat* st, int prompt_too)
 		}
 		else
 		{
-			bufsize2 = asprintf(&buff2, "%s", prompt, st->linebuf);
+			bufsize2 = asprintf(&buff2, "\033[32m%.*s\033[0m", prompt);
 			if (bufsize2 > 0)
 			{
 				write_memorystream(ms, buff2, bufsize2);
@@ -358,6 +358,7 @@ void redraw_line(struct vdehiststat* st, int prompt_too)
 		if (buf)
 		{
 			vdehist_termwrite(st->termfd, buf, (int)*bufsize);
+			
 			close_memorystream(ms);
 		}
 	}
