@@ -100,7 +100,6 @@ int main(const int argc, const char** argv)
 		goto CleanUp;
 	}
 	vdehst = vdehist_new(_fileno(stdout), serverSocket);
-	//fprintf(stdout, "%.*s\n", (int)strlen(prompt) + 1, prompt);
 	SaveCursorPos();
 	fprintf(stdout, "\033[32m%.*s\033[0m", (int)strlen(prompt) + 1, prompt);
 	while (DoLoop) {
@@ -117,45 +116,6 @@ int main(const int argc, const char** argv)
 			fprintf(stderr, "Failed to check key press\n");
 			break;
 		}
-		/*if (_kbhit())
-		{
-			std_input_buffer[std_input_pos] = _getche();
-			if (std_input_buffer[std_input_pos] == '\n' || std_input_buffer[std_input_pos] == '\r')
-			{
-				if (memcmp(std_input_buffer, "exit", min(strlen("exit"), std_input_pos)) == 0)
-				{
-					system("cls");
-					std_input_pos = 0;
-					goto CleanUp;
-				}
-				else if (memcmp(std_input_buffer, "cls", min(strlen("cls"), std_input_pos)) == 0)
-				{
-					system("cls");
-					fprintf(stdout, "%.*s\n", (int)strlen(prompt) + 1, prompt);
-					std_input_pos = 0;
-				}
-				else
-				{
-					system("cls");
-					buffer_ready = 1;
-				}
-			}
-			else if (std_input_pos >= BUFFER_SIZE - 1)
-			{
-				buffer_ready = 1;
-			}
-			else
-			{
-				if (std_input_buffer[std_input_pos] == '\b' && std_input_pos > 0)
-				{
-					std_input_pos--;
-				}
-				else
-				{
-					std_input_pos++;
-				}
-			}
-		}*/
 		if (sel > 0)
 		{
 			if (wsaPollFD[0].revents & POLLIN)

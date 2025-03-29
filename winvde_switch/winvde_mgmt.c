@@ -34,10 +34,10 @@
 
 #if defined(DEBUGOPT)
 
-#define MGMTPORTNEW (dl) 
-#define MGMTPORTDEL (dl+1) 
-#define MGMTSIGHUP (dl+2) 
-static struct dbgcl dl[] = {
+#define MGMTPORTNEW (mgmt_dl) 
+#define MGMTPORTDEL (mgmt_dl+1) 
+#define MGMTSIGHUP (mgmt_dl+2) 
+static struct dbgcl mgmt_dl[] = {
 	{"mgmt/+",NULL,D_MGMT | D_PLUS},
 	{"mgmt/-",NULL,D_MGMT | D_MINUS},
 	{"sig/hup",NULL,D_SIG | D_HUP}
@@ -74,7 +74,7 @@ void mgmtnewfd(SOCKET new);
 
 
 
-static struct comlist cl[] = {
+static struct comlist mgmt_cl[] = {
 	{"help","[arg]","Help (limited to arg when specified)",help,STRARG | WITHFILE},
 	{"logout","","logout from this mgmt terminal",vde_logout,NOARG},
 	{"shutdown","","shutdown of the switch",vde_shutdown,NOARG},
@@ -141,9 +141,9 @@ void StartConsMgmt(void)
 	mgmgt_module.init = mgmt_init;
 	mgmgt_module.handle_io = mgmt_handle_io;
 	mgmgt_module.cleanup = mgmt_cleanup;
-	ADDCL(cl);
+	ADDCL(mgmt_cl);
 #if defined(DEBUGOPT)
-	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
+	adddbgcl(sizeof(mgmt_dl) / sizeof(struct dbgcl), mgmt_dl);
 #endif
 	add_module(&mgmgt_module);
 #if defined(DEBUGOPT)

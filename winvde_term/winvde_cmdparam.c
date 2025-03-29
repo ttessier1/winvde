@@ -268,7 +268,7 @@ int ParseCommand(const char* line, size_t length, struct command_parameter** com
         {
             // This is a argument separator
             endPtr = linePtr;
-            fprintf(stdout, "Argument[%d]:%.*s Length:%lld\n", argument_index, (int)(endPtr - startPtr), startPtr, endPtr - startPtr);
+            //fprintf(stdout, "Argument[%d]:%.*s Length:%lld\n", argument_index, (int)(endPtr - startPtr), startPtr, endPtr - startPtr);
             ptr->argument = (char*)malloc((endPtr - startPtr) + 1);
             if (!ptr->argument)
             {
@@ -320,7 +320,7 @@ int ParseCommand(const char* line, size_t length, struct command_parameter** com
     if (argument_index > -1 && startPtr != NULL)
     {
         endPtr = linePtr;
-        fprintf(stdout, "Argument[%d]:%.*s Length:%lld\n", argument_index, (int)(endPtr - startPtr), startPtr, endPtr - startPtr);
+        //fprintf(stdout, "Argument[%d]:%.*s Length:%lld\n", argument_index, (int)(endPtr - startPtr), startPtr, endPtr - startPtr);
         ptr->argument = (char*)malloc((endPtr - startPtr) + 1);
         if (!ptr->argument)
         {

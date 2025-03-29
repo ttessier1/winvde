@@ -69,6 +69,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestQsort", "TestQsort\Test
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestConsoleIo", "TestConsoleIo\TestConsoleIo.vcxproj", "{E25F65CA-D6B3-4557-BCED-B4FCB94F2FE6}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "winvde_dump", "winvde_dump\winvde_dump.vcxproj", "{2F127C10-0993-4F5E-89C2-C52F8AE66803}"
+	ProjectSection(ProjectDependencies) = postProject
+		{4C693B06-AA5B-4DF5-8468-82C3D467D7D1} = {4C693B06-AA5B-4DF5-8468-82C3D467D7D1}
+		{9EC26973-3036-4D08-AEEE-E4F457AA1A43} = {9EC26973-3036-4D08-AEEE-E4F457AA1A43}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -221,6 +227,14 @@ Global
 		{E25F65CA-D6B3-4557-BCED-B4FCB94F2FE6}.Release|x64.Build.0 = Release|x64
 		{E25F65CA-D6B3-4557-BCED-B4FCB94F2FE6}.Release|x86.ActiveCfg = Release|Win32
 		{E25F65CA-D6B3-4557-BCED-B4FCB94F2FE6}.Release|x86.Build.0 = Release|Win32
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Debug|x64.ActiveCfg = Debug|x64
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Debug|x64.Build.0 = Debug|x64
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Debug|x86.ActiveCfg = Debug|Win32
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Debug|x86.Build.0 = Debug|Win32
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Release|x64.ActiveCfg = Release|x64
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Release|x64.Build.0 = Release|x64
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Release|x86.ActiveCfg = Release|Win32
+		{2F127C10-0993-4F5E-89C2-C52F8AE66803}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -2,6 +2,8 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <vadefs.h>
+#include <stdarg.h>
 #include <errno.h>
 
 #include "winvde_plugin.h"
@@ -18,7 +20,7 @@
 #endif
 
 #define MODULES_EXT ".dll"
-#define PLUGINS_DIR "plugins"
+#define PLUGINS_DIR ".winvde2\\plugins"
 
 struct plugin* pluginh = NULL;
 struct plugin** plugint = &pluginh;
@@ -28,7 +30,7 @@ int pluginlist(struct comparameter * parameter)
 {
 	char* tmpBuff = NULL;
 	size_t length = 0;
-#define PLUGINFMT "%-22s %s\n"
+#define PLUGINFMT "%-30s %-50s\n"
 	struct plugin* plugin_struct;
 	int rv = ENOENT;
 	if (!parameter)
@@ -43,7 +45,7 @@ int pluginlist(struct comparameter * parameter)
 		)
 	{
 		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "NAME", "HELP");
-		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------", "----");
+		printoutc(parameter->data1.file_descriptor, PLUGINFMT, "------------------------------", "----------------------------------------");
 		for (plugin_struct = pluginh; plugin_struct != NULL; plugin_struct = plugin_struct->next)
 		{
 			if (strncmp(plugin_struct->name, parameter->paramValue.stringValue, strlen(parameter->paramValue.stringValue)) == 0)
@@ -70,7 +72,7 @@ int pluginlist(struct comparameter * parameter)
 			errno = ENOMEM;
 			return -1;
 		}
-		length = asprintf(&tmpBuff, PLUGINFMT, "------------", "----");
+		length = asprintf(&tmpBuff, PLUGINFMT, "------------------------------", "----------------------------------------");
 		if (length > 0 && tmpBuff)
 		{
 			send(parameter->data1.socket, tmpBuff, (int)length,0);
@@ -118,7 +120,7 @@ int pluginlist(struct comparameter * parameter)
 			errno = ENOMEM;
 			return -1;
 		}
-		length = asprintf(&tmpBuff, PLUGINFMT, "------------", "----");
+		length = asprintf(&tmpBuff, PLUGINFMT, "------------------------------", "----------------------------------------");
 		if (length > 0 && tmpBuff)
 		{
 			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
@@ -183,6 +185,10 @@ HMODULE plugin_dlopen(const char* modname)
 	{
 		strncpy_s(homedir,MAX_PATH,"\\",strlen("\\"));
 	}
+	else
+	{
+		strncat_s(homedir, MAX_PATH, "\\", 1);
+	}
 
 	tplen = strlen(modname) +
 		strlen(MODULES_EXT) + 2 + // + 1 is for a '/' and + 1 for \0
@@ -192,11 +198,11 @@ HMODULE plugin_dlopen(const char* modname)
 	testpath = (char*)malloc(tplen);
 	if (testpath)
 	{
-		TRY_DLOPEN("%s%s", modname, MODULES_EXT);
-		TRY_DLOPEN("%s%s\\%s", homedir, USER_PLUGINS_DIR, modname);
-		TRY_DLOPEN("%s%s\\%s%s", homedir, USER_PLUGINS_DIR, modname, MODULES_EXT);
-		TRY_DLOPEN("%s%s", PLUGINS_DIR, modname);
-		TRY_DLOPEN("%s\\%s%s", PLUGINS_DIR, modname, MODULES_EXT);
+		if ((handle = TRY_DLOPEN(testpath, tplen, "%s%s", modname, MODULES_EXT)) != INVALID_HANDLE_VALUE) { return handle; }
+		if ((handle = TRY_DLOPEN(testpath, tplen, "%s%s\\%s", homedir, USER_PLUGINS_DIR, modname)) != INVALID_HANDLE_VALUE) { return handle; }
+		if ((handle = TRY_DLOPEN(testpath, tplen, "%s%s\\%s%s", homedir, USER_PLUGINS_DIR, modname, MODULES_EXT)) != INVALID_HANDLE_VALUE) { return handle; }
+		if ((handle = TRY_DLOPEN(testpath, tplen, "%s%s", PLUGINS_DIR, modname)) != INVALID_HANDLE_VALUE) { return handle; }
+		if ((handle = TRY_DLOPEN(testpath, tplen, "%s\\%s%s", PLUGINS_DIR, modname, MODULES_EXT)) != INVALID_HANDLE_VALUE) { return handle; }
 		if (testpath)
 		{
 			free(testpath);
@@ -223,9 +229,9 @@ int pluginadd(struct comparameter * parameter)
 		parameter->paramValue.stringValue != NULL
 	)
 	{
-		if ((handle = plugin_dlopen(parameter->paramValue.stringValue)) != NULL)
+		if ((handle = plugin_dlopen(parameter->paramValue.stringValue)) != INVALID_HANDLE_VALUE)
 		{
-			plugin_struct = (struct plugin*)GetProcAddress(handle, "vde_plugin_data");
+			plugin_struct = (struct plugin*)GetProcAddress(handle, "winvde_plugin_data");
 			if (plugin_struct != NULL)
 			{
 				if (plugin_struct->handle != NULL)
@@ -326,6 +332,23 @@ void delplugin(struct plugin* cl)
 			plugint = p;
 		}
 	}
+}
+
+int TRY_DLOPEN(char* testpath, int tplen, char* fmt, ...)
+{
+	HANDLE handle = INVALID_HANDLE_VALUE;
+	va_list args;
+
+	va_start(args, fmt);
+	vsnprintf(testpath, tplen, fmt, args);
+	va_end(args);
+	handle = LoadLibraryA(testpath);
+	if (handle != INVALID_HANDLE_VALUE)
+	{
+		free(testpath);
+		return handle;
+	}
+	return INVALID_HANDLE_VALUE;
 }
 
 #endif

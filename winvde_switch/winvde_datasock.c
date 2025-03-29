@@ -117,7 +117,7 @@ void datasock_cleanup(unsigned char type, SOCKET fd, void* arg);
 void delep(SOCKET fd_ctl, SOCKET fd_data, void* descr);
 int send_datasock(SOCKET fd_ctl, SOCKET fd_data, void* packet, int len, uint16_t port);
 
-static struct comlist cl[] = {
+static struct comlist datasock_cl[] = {
 	{"ds","============","DATA SOCKET MENU",NULL,NOARG},
 	{"ds/showinfo","","show ds info",datasock_showinfo,NOARG | WITHFILE},
 };
@@ -138,7 +138,7 @@ void StartDataSock(void)
 	module_functions.delep = delep;
 
 
-	ADDCL(cl);
+	ADDCL(datasock_cl);
 	add_module(&datasock_module);
 }
 

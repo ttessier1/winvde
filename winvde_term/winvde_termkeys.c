@@ -315,9 +315,9 @@ int DoKbHit()
                 if (insertMode == 0 && input_char != '\r' && !input_char != '\n')
                 {
                     _putch(input_char);
-                    fprintf(stdout, "\0337");
-                    printf("%.*s", std_input_length - std_input_pos, &std_input_buffer[std_input_pos]);
-                    fprintf(stdout, "\0338");
+                    //fprintf(stdout, "\0337");
+                    //printf("%.*s", std_input_length - std_input_pos, &std_input_buffer[std_input_pos]);
+                    //fprintf(stdout, "\0338");
                     memcpy(std_input_cpy_buffer, &std_input_buffer[std_input_pos], std_input_length - std_input_pos);
                     std_input_buffer[std_input_pos] = input_char;
                     memcpy(&std_input_buffer[std_input_pos + 1], std_input_cpy_buffer, min(STD_INPUT_BUFF_SIZE - std_input_pos, std_input_length - std_input_pos));

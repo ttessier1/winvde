@@ -737,8 +737,14 @@ size_t vdehist_term_to_mgmt(struct vdehiststat* st,char * buf, int size)
 							vdehist_termwrite(st->termfd, "\033[@", 3);
 						}
 						vdehist_termwrite(st->termfd, &(buf[i]), size);
+						vdehist_termwrite(st->termfd, "\n",1);
 						send(st->mgmtfd, &(buf[i]), size,0);
 						
+						i += size;
+					}
+					else if(!st->echo && !(st->status& HIST_PASSWDFLAG))
+					{
+						send(st->mgmtfd, &(buf[i]), size, 0);
 						i += size;
 					}
 					if (buf[i] != '\r')

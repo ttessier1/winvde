@@ -37,14 +37,8 @@
 #define D_FSTP 040
 
 #if defined(DEBUGOPT)
-#define DBGPORTNEW (dl) 
-#define DBGPORTDEL (dl+1) 
-#define DBGPORTDESCR (dl+2) 
-#define DBGEPNEW (dl+3) 
-#define DBGEPDEL (dl+4) 
-#define PKTFILTIN (dl+5)
-#define PKTFILTOUT (dl+6)
-struct dbgcl dl[] = {
+
+struct dbgcl port_dl[] = {
 	  {"port/+","new port",D_PORT | D_PLUS},
 		{"port/-","closed port",D_PORT | D_MINUS},
 		{"port/descr","set port description",D_PORT | D_DESCR},
@@ -53,6 +47,13 @@ struct dbgcl dl[] = {
 		{"packet/in",NULL,D_PACKET | D_IN},
 		{"packet/out",NULL,D_PACKET | D_OUT},
 };
+#define DBGPORTNEW (port_dl) 
+#define DBGPORTDEL (port_dl+1) 
+#define DBGPORTDESCR (port_dl+2) 
+#define DBGEPNEW (port_dl+3) 
+#define DBGEPDEL (port_dl+4) 
+#define PKTFILTIN (port_dl+5)
+#define PKTFILTOUT (port_dl+6)
 #endif
 
 
@@ -143,7 +144,7 @@ char* port_getuser(int uid);
 char* port_getgroup(int gid);
 int rec_close_ep(struct endpoint** pep, int fd_ctl);
 */
-struct comlist cl[] = {
+struct comlist port_cl[] = {
 	{"port","============","PORT STATUS MENU",NULL,NOARG},
 	{"port/showinfo","","show port info",port_showinfo,NOARG | WITHFILE},
 	{"port/setnumports","N","set the number of ports",portsetnumports,INTARG},
@@ -189,10 +190,10 @@ void port_init(int init_num_ports)
 		printlog(LOG_ERR, "ALLOC port data structures");
 		exit(1);
 	}
-	ADDCL(cl);
+	ADDCL(port_cl);
 
 #if defined(DEBUGOPT)
-	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
+	adddbgcl(sizeof(port_dl) / sizeof(struct dbgcl), port_dl);
 #endif
 	if (vlancreate_nocheck(0) != 0) {
 		printlog(LOG_ERR, "ALLOC vlan port data structures");

@@ -18,9 +18,9 @@
 #include "winvde_event.h"
 
 #ifdef DEBUGOPT
-#define DBGHASHNEW (dl) 
-#define DBGHASHDEL (dl+1)
-static struct dbgcl dl[] = {
+#define DBGHASHNEW (hash_dl) 
+#define DBGHASHDEL (hash_dl+1)
+static struct dbgcl hash_dl[] = {
 	{"hash/+","hash: new element",D_HASH | D_PLUS},
 	{"hash/-","hash: discarded element",D_HASH | D_MINUS},
 };
@@ -71,7 +71,7 @@ void HASH_INIT(int BIT);
 void delete_port_iterator(struct hash_entry* e, void* arg);
 void hash_delete_port(int port);
 
-static struct comlist cl[] = {
+static struct comlist hash_cl[] = {
 	{"hash","============","HASH TABLE MENU",NULL,NOARG},
 	{"hash/showinfo","","show hash info",showinfo,NOARG | WITHFILE},
 	{"hash/setsize","N","change hash size",hash_resize,INTARG},
@@ -92,9 +92,9 @@ void HashInit(uint32_t hash_size)
 	gc_interval = GC_INTERVAL;
 	gc_expire = GC_EXPIRE;
 	gc_timer_no = qtimer_add(gc_interval,0,hash_gc,NULL);
-	ADDCL(cl);
+	ADDCL(hash_cl);
 #if defined(DEBUGOPT)
-	adddbgcl(sizeof(dl) / sizeof(struct dbgcl), dl);
+	adddbgcl(sizeof(hash_dl) / sizeof(struct dbgcl), hash_dl);
 #endif
 }
 

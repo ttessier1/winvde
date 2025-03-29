@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+
 #if defined(VDEPLUGIN)
 
 #define USER_PLUGINS_DIR ".winvde2\\plugins"
@@ -16,16 +17,7 @@ struct plugin {
 extern struct plugin* pluginh;
 extern struct plugin** plugint;
 
-#define TRY_DLOPEN(fmt,...) \
-{ \
-	snprintf(testpath, tplen, fmt,  __VA_ARGS__); \
-	handle = LoadLibraryA(testpath); \
-	if (handle!=NULL) \
-	{ \
-		free(testpath); \
-		return handle; \
-	} \
-}
+
 
 int pluginlist(struct comparameter* parameter);
 HMODULE plugin_dlopen(const char* modname);
