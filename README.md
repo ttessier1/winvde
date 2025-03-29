@@ -32,10 +32,10 @@ Current Goals:
 # * Implement mod_support - Done prelminary
 # * Implement Memory Stream - Done preliminary
 # * Implement DoIt function - Done preliminary
-* Fix artifacts in the console routines to clear line before output or otherwise clear the screen before output - Done preliminary
-* Fix backspace to work properly and not allow backspace past prompt
-* Fix up/down characters to traverse history
-* Todo Implement plugin dump
+# * Fix artifacts in the console routines to clear line before output or otherwise clear the screen before output - Done preliminary
+# * Fix backspace to work properly and not allow backspace past prompt - Done preliminary
+# * Fix up/down characters to traverse history - Done preliminary
+# * Todo Implement plugin dump - Done preliminary
 * Todo Implement plugin iplog
 * Todo Implement plugin pdump
 * Todo Implement module Tap
