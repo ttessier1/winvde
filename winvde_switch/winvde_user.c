@@ -26,6 +26,55 @@ wchar_t * GetUserNameFunction()
     return _wcsdup(username);
 }
 
+uint32_t ValidateUserId(uint32_t user_id)
+{
+    LPBYTE userBuffer = NULL;
+    DWORD numberOfEntries = 0;
+    DWORD totalNumberOfEntries = 0;
+    DWORD resumeHandle = 0;
+    DWORD index = -1;
+    DWORD found = 0;
+    USER_INFO_0* lpUserInfo = NULL;
+
+    if (user_id >=0)
+    {
+        if (user_id == 0)
+        {
+            return 0;
+        }
+        else
+        {
+            if (NetUserEnum(NULL, 0, FILTER_NORMAL_ACCOUNT, &userBuffer, MAX_PREFERRED_LENGTH, &numberOfEntries, &totalNumberOfEntries, &resumeHandle) == NERR_Success)
+            {
+                lpUserInfo = (USER_INFO_0*)userBuffer;
+                for (index = 1; index < numberOfEntries; index++)
+                {
+                    if (user_id == index)
+                    {
+                        found = 1;
+                        break;
+                    }
+
+                }
+                NetApiBufferFree(userBuffer);
+            }
+            else
+            {
+                fprintf(stderr, "Failed to get local groups: %d\n", GetLastError());
+            }
+        }
+    }
+    if (found == 1)
+    {
+        return index;
+    }
+    else
+    {
+        return -1;
+    }
+
+}
+
 uint32_t GetUserIdFunction()
 {
     LPBYTE userBuffer = NULL;
@@ -33,6 +82,7 @@ uint32_t GetUserIdFunction()
     DWORD totalNumberOfEntries = 0;
     DWORD resumeHandle = 0;
     DWORD index = -1;
+    DWORD found = 0;
     USER_INFO_0* lpUserInfo = NULL;
     wchar_t*  username = GetUserNameFunction();
     if (username != NULL)
@@ -53,11 +103,13 @@ uint32_t GetUserIdFunction()
                         wcscmp(lpUserInfo[index].usri0_name, username) == 0)
                     {
                         index = 0;
+                        found = 1;
                         break;
                     }
                     else if (wcscmp(lpUserInfo[index].usri0_name, username) == 0 )
                     {
-                        fwprintf(stdout, L"User Name:%s\n", lpUserInfo[index].usri0_name);
+                        //fwprintf(stdout, L"User Name:%s\n", lpUserInfo[index].usri0_name);
+                        found = 1;
                         break;
                     }
                     
@@ -71,7 +123,61 @@ uint32_t GetUserIdFunction()
         }
         free(username);
     }
-    return index;
+    if (found == 1)
+    {
+        return index;
+    }
+    else
+    {
+        return -1;
+    }
+    
+}
+
+uint32_t ValidateGroupId(uint32_t group_id)
+{
+    struct group* theGroup = NULL;
+    LPBYTE groupBuffer = NULL;
+    DWORD numberOfEntries = 0;
+    DWORD totalNumberOfEntries = 0;
+    DWORD_PTR resumeHandle = 0;
+    DWORD index = 0;
+    DWORD found = 0;
+    LOCALGROUP_INFO_0* lpGroupInfo = NULL;
+    size_t nameLength = 0;
+    wchar_t* wideGroupName = NULL;
+    if (group_id >= 0)
+    {
+        if (group_id == 0)
+        {
+            return 0;
+        }
+        if (NetLocalGroupEnum(NULL, 0, &groupBuffer, MAX_PREFERRED_LENGTH, &numberOfEntries, &totalNumberOfEntries, &resumeHandle) == NERR_Success)
+        {
+            lpGroupInfo = (LOCALGROUP_INFO_0*)groupBuffer;
+            for (index = 0; index < numberOfEntries; index++)
+            {
+                if (index == group_id)
+                {
+                    found = 1;
+                    break;
+                }
+            }
+            NetApiBufferFree(groupBuffer);
+        }
+        else
+        {
+            fprintf(stderr, "Failed to get local groups: %d\n", GetLastError());
+        }
+    }
+    if (found == 1)
+    {
+        return index;
+    }
+    else
+    {
+        return -1;
+    }
 }
 
 struct group * GetGroupFunction(const char * groupName)

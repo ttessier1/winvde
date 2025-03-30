@@ -491,6 +491,8 @@ int portsetvlan(struct comparameter* parameter)
 int portcreateauto(struct comparameter* parameter/*FILE* fd*/)
 {
 	int port = 0; 
+	size_t length = 0;
+	char* tmpBuff = NULL;
 	if (!parameter)
 	{
 		errno = EINVAL;
@@ -506,6 +508,48 @@ int portcreateauto(struct comparameter* parameter/*FILE* fd*/)
 
 		portv[port]->flag |= NOTINPOOL;
 		printoutc(parameter->data1.file_descriptor, "Port %04d", port);
+	}
+	else if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET && parameter->paramType == com_param_type_null)
+	{
+		port = alloc_port(0);
+		if (port == -2)
+		{
+			send(parameter->data1.socket, "Not Enough Ports\n", strlength("Not Enough Ports\n"), 0);
+			return ENOSPC;
+		}
+		if (port < 0)
+		{
+			return ENOSPC;
+		}
+
+		portv[port]->flag |= NOTINPOOL;
+		length = asprintf(&tmpBuff, "Port %04d", port);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff,(int)length,0);
+			free(tmpBuff);
+		}
+	}
+	else if (parameter->type1 == com_type_memstream && parameter->data1.mem_stream != NULL && parameter->paramType == com_param_type_null)
+	{
+		port = alloc_port(0);
+		if (port == -2)
+		{
+			write_memorystream(parameter->data1.mem_stream, "Not Enough Ports\n", strlength("Not Enough Ports\n"));
+			return ENOSPC;
+		}
+		if (port < 0)
+		{
+			return ENOSPC;
+		}
+
+		portv[port]->flag |= NOTINPOOL;
+		length = asprintf(&tmpBuff, "Port %04d", port);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, (int)length);
+			free(tmpBuff);
+		}
 	}
 	return 0;
 }
@@ -641,15 +685,7 @@ int portsetuser(struct comparameter* parameter)
 		{
 			portuid++;
 		}
-		while (*portuid != 0 && *portuid != ' ')
-		{
-			portuid++;
-		}
-		while (*portuid != 0 && *portuid == ' ')
-		{
-			portuid++;
-		}
-		if (sscanf_s(parameter->paramValue.stringValue, "%i", &port) != 1 || *portuid == 0)
+		if (sscanf_s(portuid, "%i", &port) != 1 || *portuid == 0)
 		{
 			return EINVAL;
 		}
@@ -661,8 +697,19 @@ int portsetuser(struct comparameter* parameter)
 		{
 			return ENXIO;
 		}
-		user_id = GetUserIdFunction();
-		if (user_id != -1)
+		while (*portuid != 0 && *portuid != ' ')
+		{
+			portuid++;
+		}
+		while (*portuid != 0 && *portuid == ' ')
+		{
+			portuid++;
+		}
+		if (sscanf_s(portuid, "%i", &user_id) != 1 || *portuid == 0)
+		{
+			return EINVAL;
+		}
+		if(ValidateUserId(user_id)>=0)
 		{
 			portv[port]->user = user_id;
 		}
@@ -701,15 +748,8 @@ int portsetgroup(struct comparameter* parameter)
 		{
 			portgid++;
 		}
-		while (*portgid != 0 && *portgid != ' ')
-		{
-			portgid++;
-		}
-		while (*portgid != 0 && *portgid == ' ')
-		{
-			portgid++;
-		}
-		if (sscanf_s(parameter->paramValue.stringValue, "%i", &port) != 1 || *portgid == 0)
+		
+		if (sscanf_s(portgid, "%i", &port) != 1 || *portgid == 0)
 		{
 			return EINVAL;
 		}
@@ -721,10 +761,21 @@ int portsetgroup(struct comparameter* parameter)
 		{
 			return ENXIO;
 		}
-		groupval = GetGroupFunction(parameter->paramValue.stringValue);
-		if (groupval != NULL)
+		while (*portgid != 0 && *portgid != ' ')
 		{
-			portv[port]->group = groupval->groupid;
+			portgid++;
+		}
+		while (*portgid != 0 && *portgid == ' ')
+		{
+			portgid++;
+		}
+		if (sscanf_s(portgid, "%i", &group_id) != 1 || *portgid == 0)
+		{
+			return EINVAL;
+		}
+		if(ValidateGroupId(group_id)!=-1)
+		{ 
+			portv[port]->group = group_id;
 		}
 		else if (strcmp(portgid, "NONE") == 0 || strcmp(portgid, "ANY") == 0)
 		{
@@ -1181,16 +1232,26 @@ int alloc_port(unsigned int portno)
 		/* take one */
 		for (index = 1; index < numports && portv[index] != NULL &&
 			(portv[index]->ep != NULL || portv[index]->flag & NOTINPOOL); index++)
+		{
 			;
+		}
 	}
 	else if (index < 0) /* special case MGMT client port */
+	{
 		index = 0;
+	}
 	if (index >= numports)
-		return -1;
-	else {
-		if (portv[index] == NULL) {
+	{
+		fprintf(stderr, "Attempt to create index: %d more tha numports: %d\n",index, numports);
+		return -2;
+	}
+	else
+	{
+		if (portv[index] == NULL)
+		{
 			struct port* port;
-			if ((port = malloc(sizeof(struct port))) == NULL) {
+			if ((port = malloc(sizeof(struct port))) == NULL)
+			{
 				strerror_s(errorbuff, sizeof(errorbuff), errno);
 				printlog(LOG_WARNING, "malloc port %s", errorbuff);
 				return -1;
