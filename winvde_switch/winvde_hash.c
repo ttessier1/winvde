@@ -16,6 +16,8 @@
 #include "winvde_debugcl.h"
 #include "winvde_debugopt.h"
 #include "winvde_event.h"
+#include "winvde_printfunc.h"
+#include "winvde_memorystream.h"
 
 #ifdef DEBUGOPT
 #define DBGHASHNEW (hash_dl) 
@@ -59,7 +61,7 @@ struct hash_entry** hash_head;
 int po2round(int vx);
 int showinfo(struct comparameter* parameter);
 int print_hash(struct comparameter* parameter);
-void print_hash_entry(struct hash_entry* hash_entry_value, void* arg);
+int print_hash_entry(struct hash_entry* hash_entry_value, struct comparameter* parameter);
 int find_hash(struct comparameter* parameter);
 int hash_resize(struct comparameter* parameter);
 int hash_set_minper(struct comparameter* parameter);
@@ -68,8 +70,6 @@ struct hash_entry* find_entry(uint64_t MAC);
 void flush_iterator(struct hash_entry* hash_entry_value, void* arg);
 void hash_flush();
 void HASH_INIT(int BIT);
-void delete_port_iterator(struct hash_entry* e, void* arg);
-void hash_delete_port(int port);
 
 static struct comlist hash_cl[] = {
 	{"hash","============","HASH TABLE MENU",NULL,NOARG},
@@ -119,7 +119,7 @@ int po2round(int vx)
 }
 
 
-void for_all_hash(void (*f)(struct hash_entry*, void*), void* arg)
+void for_all_hash(void (*f)(struct hash_entry*, struct comparameter*),struct comparameter* param)
 {
 	int index;
 	struct hash_entry* e, * next;
@@ -127,7 +127,7 @@ void for_all_hash(void (*f)(struct hash_entry*, void*), void* arg)
 	for (index = 0; index < HASH_SIZE; index++) {
 		for (e = hash_head[index]; e; e = next) {
 			next = e->next;
-			(*f)(e, arg);
+			(*f)(e, param);
 		}
 	}
 }
@@ -136,6 +136,8 @@ void for_all_hash(void (*f)(struct hash_entry*, void*), void* arg)
 //int showinfo(FILE* fd)
 int showinfo(struct comparameter* parameter)
 {
+	char* tmpBuff = NULL;
+	size_t length = 0;
 	if (!parameter)
 	{
 		errno = EINVAL;
@@ -147,6 +149,102 @@ int showinfo(struct comparameter* parameter)
 		printoutc(parameter->data1.file_descriptor, "GC interval %d secs", gc_interval);
 		printoutc(parameter->data1.file_descriptor, "GC expire %d secs", gc_expire);
 		printoutc(parameter->data1.file_descriptor, "Min persistence %d secs", min_persistence);
+		return 0;
+	}
+	else if (parameter->type1 == com_type_socket && parameter->data1.socket != INVALID_SOCKET)
+	{
+		length = asprintf(&tmpBuff, "Hash size %d\n", HASH_SIZE);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "GC interval %d secs\n", gc_interval);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "GC expire %d secs\n", gc_expire);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "Min persistence %d secs\n", min_persistence);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		return 0;
+	}
+	else if (parameter->type1 == com_type_memstream && parameter->data1.mem_stream != NULL)
+	{
+		length = asprintf(&tmpBuff, "Hash size %d\n", HASH_SIZE);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "GC interval %d secs\n", gc_interval);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "GC expire %d secs\n", gc_expire);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+		length = asprintf(&tmpBuff, "Min persistence %d secs\n", min_persistence);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			free(tmpBuff);
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
 		return 0;
 	}
 	else
@@ -164,10 +262,34 @@ int print_hash(struct comparameter* parameter)
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL && parameter->paramType==com_param_type_null)
+	if (
+		parameter->type1 == com_type_file && 
+		parameter->data1.file_descriptor != NULL && 
+		parameter->paramType==com_param_type_null
+	)
 	{
 		qtime_csenter();
-		for_all_hash(print_hash_entry, parameter->data1.file_descriptor);
+		for_all_hash(print_hash_entry, parameter);
+		qtime_csexit();
+	}
+	else if (
+		parameter->type1 == com_type_socket &&
+		parameter->data1.socket != INVALID_SOCKET &&
+		parameter->paramType == com_param_type_null
+		)
+	{
+		qtime_csenter();
+		for_all_hash(print_hash_entry, parameter);
+		qtime_csexit();
+	}
+	else if (
+		parameter->type1 == com_type_memstream &&
+		parameter->data1.mem_stream != NULL &&
+		parameter->paramType == com_param_type_null
+		)
+	{
+		qtime_csenter();
+		for_all_hash(print_hash_entry, parameter);
 		qtime_csexit();
 	}
 	else
@@ -178,17 +300,82 @@ int print_hash(struct comparameter* parameter)
 	return 0;
 }
 
-void print_hash_entry(struct hash_entry* hash_entry_value, void* arg)
+int print_hash_entry(struct hash_entry* hash_entry_value, struct comparameter* parameter)
 {
-
-	FILE* pfd = arg;
-	printoutc(pfd, "Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
-		"age %ld secs", 
-		calc_hash(hash_entry_value->dst),
-		EMAC2MAC6(hash_entry_value->dst), 
-		EMAC2VLAN(hash_entry_value->dst), 
-		hash_entry_value->port, 
-		qtime() - hash_entry_value->last_seen);
+	char* tmpBuff = NULL;
+	size_t length = 0;
+	if (!parameter)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (
+		parameter->type1 == com_type_file && 
+		parameter->data1.file_descriptor != NULL
+	)
+	{
+		printoutc(parameter->data1.file_descriptor, "Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
+			"age %ld secs",
+			calc_hash(hash_entry_value->dst),
+			EMAC2MAC6(hash_entry_value->dst),
+			EMAC2VLAN(hash_entry_value->dst),
+			hash_entry_value->port,
+			qtime() - hash_entry_value->last_seen);
+		return 0;
+	}
+	else if (
+		parameter->type1 == com_type_socket &&
+		parameter->data1.socket != INVALID_SOCKET
+		)
+	{
+		length = asprintf(&tmpBuff,"Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
+			"age %ld secs",
+			calc_hash(hash_entry_value->dst),
+			EMAC2MAC6(hash_entry_value->dst),
+			EMAC2VLAN(hash_entry_value->dst),
+			hash_entry_value->port,
+			qtime() - hash_entry_value->last_seen);
+		if (length > 0 && tmpBuff)
+		{
+			send(parameter->data1.socket, tmpBuff, (int)length, 0);
+			return 0;
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+	}
+	else if (
+		parameter->type1 == com_type_memstream &&
+		parameter->data1.mem_stream != NULL
+		)
+	{
+		length = asprintf(&tmpBuff, "Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
+			"age %ld secs",
+			calc_hash(hash_entry_value->dst),
+			EMAC2MAC6(hash_entry_value->dst),
+			EMAC2VLAN(hash_entry_value->dst),
+			hash_entry_value->port,
+			qtime() - hash_entry_value->last_seen);
+		if (length > 0 && tmpBuff)
+		{
+			write_memorystream(parameter->data1.mem_stream, tmpBuff, length);
+			return 0;
+		}
+		else
+		{
+			errno = ENOMEM;
+			return -1;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	errno = EINVAL;
+	return -1;
 }
 
 /* looks in global hash table 'h' for given address, and return associated
@@ -264,39 +451,43 @@ int find_hash(struct comparameter* parameter)
 	unsigned char* mac = macv;
 	int rv = -1;
 	int vlan = 0;
+	size_t length = 0;
+	char* tmpBuff = NULL;
 	struct hash_entry* hash_entry_value = NULL;
 	if (!parameter)
 	{
 		errno = EINVAL;
 		return -1;
 	}
-	if (parameter->type1 == com_type_file && 
-		parameter->data1.file_descriptor != NULL &&
-		parameter->paramType== com_param_type_string && 
-		parameter->paramValue.stringValue != NULL)
+	if (strchr(parameter->paramValue.stringValue, ':') != NULL)
 	{
-		if (strchr(parameter->paramValue.stringValue, ':') != NULL)
+		rv = sscanf_s(parameter->paramValue.stringValue, "%x:%x:%x:%x:%x:%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
+	}
+	else
+	{
+		rv = sscanf_s(parameter->paramValue.stringValue, "%x.%x.%x.%x.%x.%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
+	}
+	if (rv < 6)
+	{
+		return EINVAL;
+	}
+	else
+	{
+		for (index = 0; index < ETH_ALEN; index++)
 		{
-			rv = sscanf_s(parameter->paramValue.stringValue, "%x:%x:%x:%x:%x:%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
+			mac[index] = maci[index];
 		}
-		else
+		hash_entry_value = find_entry(extmac(mac, vlan));
+		if (parameter->type1 == com_type_file && 
+			parameter->data1.file_descriptor != NULL &&
+			parameter->paramType== com_param_type_string && 
+			parameter->paramValue.stringValue != NULL)
 		{
-			rv = sscanf_s(parameter->paramValue.stringValue, "%x.%x.%x.%x.%x.%x %d", maci + 0, maci + 1, maci + 2, maci + 3, maci + 4, maci + 5, &vlan);
-		}
-		if (rv < 6)
-		{
-			return EINVAL;
-		}
-		else
-		{
-			for (index = 0; index < ETH_ALEN; index++)
-			{
-				mac[index] = maci[index];
-			}
-			hash_entry_value = find_entry(extmac(mac, vlan));
+
 			if (hash_entry_value == NULL)
 			{
-				return ENODEV;
+				errno = ENODEV;
+				return 0;
 			}
 			else
 			{
@@ -310,11 +501,66 @@ int find_hash(struct comparameter* parameter)
 				return 0;
 			}
 		}
-	}
-	else
-	{
-		errno = EINVAL;
-		return -1;
+		else if (parameter->type1 == com_type_socket &&
+			parameter->data1.socket != INVALID_SOCKET &&
+			parameter->paramType == com_param_type_string &&
+			parameter->paramValue.stringValue != NULL)
+		{
+
+			if (hash_entry_value == NULL)
+			{
+				errno = ENODEV;
+				return 0;
+			}
+			else
+			{
+				length = asprintf(&tmpBuff,"Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
+					"age %ld secs",
+					calc_hash(hash_entry_value->dst),
+					EMAC2MAC6(hash_entry_value->dst),
+					EMAC2VLAN(hash_entry_value->dst),
+					hash_entry_value->port + 1,
+					qtime() - hash_entry_value->last_seen);
+				if (length > 0 && tmpBuff)
+				{
+					send(parameter->data1.socket, tmpBuff, (int)length, 0);
+					free(tmpBuff);
+				}
+				return 0;
+			}
+		}
+		else if (parameter->type1 == com_type_memstream&&
+			parameter->data1.mem_stream != NULL &&
+			parameter->paramType == com_param_type_string &&
+			parameter->paramValue.stringValue != NULL)
+		{
+			if (hash_entry_value == NULL)
+			{
+				errno = ENODEV;
+				return 0;
+			}
+			else
+			{
+				length = asprintf(&tmpBuff, "Hash: %04d Addr: %02x:%02x:%02x:%02x:%02x:%02x VLAN %04d to port: %03d  "
+					"age %ld secs",
+					calc_hash(hash_entry_value->dst),
+					EMAC2MAC6(hash_entry_value->dst),
+					EMAC2VLAN(hash_entry_value->dst),
+					hash_entry_value->port + 1,
+					qtime() - hash_entry_value->last_seen);
+				if (length > 0 && tmpBuff)
+				{
+					write_memorystream(parameter->data1.socket, tmpBuff, length);
+					free(tmpBuff);
+				}
+				return 0;
+			}
+		}
+		else
+		{
+			errno = EINVAL;
+			return -1;
+		}
 	}
 }
 
@@ -425,6 +671,10 @@ void hash_flush()
 	qtime_csexit();
 }
 
+//TODO: dont exit on failure
+// save the existing set, try to allocate a new set
+// on success copy over and return 0
+// on failure return -1 and set errno appropriately
 void HASH_INIT(int BIT)
 {
 	hash_bits = (BIT);
@@ -444,18 +694,62 @@ void HASH_INIT(int BIT)
 	}
 }
 
-void delete_port_iterator(struct hash_entry* e, void* arg)
+int delete_port_iterator(struct hash_entry* e, struct comparameter* param)
 {
-	int* pport = (int*)arg;
-	if (e->port == *pport)
-		delete_hash_entry(e);
+	int pport = 0 ;
+	if (!param||!e)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (
+		param->type1 == com_type_null &&
+		param->type2 == com_type_null &&
+		param->paramType == com_param_type_int
+		)
+	{
+		pport = param->paramValue.intValue;
+		if (e->port == pport)
+		{
+			delete_hash_entry(e);
+			return 0;
+		}
+		else
+		{
+			errno = EINVAL;
+			return -1;
+		}
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 }
 
-void hash_delete_port(int port)
+int hash_delete_port(struct comparameter* param)
 {
-	qtime_csenter();
-	for_all_hash(delete_port_iterator, &port);
-	qtime_csexit();
+	if (!param)
+	{
+		errno = EINVAL;
+		return -1;
+	}
+	if (
+		param->type1 == com_type_null &&
+		param->type2 == com_type_null &&
+		param->paramType == com_param_type_int
+		)
+	{
+		qtime_csenter();
+		for_all_hash(delete_port_iterator, param);
+		qtime_csexit();
+		return 0;
+	}
+	else
+	{
+		errno = EINVAL;
+		return -1;
+	}
 }
 
 

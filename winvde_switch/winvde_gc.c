@@ -23,10 +23,10 @@ void gc(struct hash_entry* hash_entry_value, void* now)
 	}
 }
 
-void hash_gc(void* arg)
+void hash_gc(struct comparameter* parameter)
 {
 	time_t t = qtime();
-	for_all_hash(&gc, &t);
+	for_all_hash(&gc, parameter);
 }
 
 //int hash_set_gc_interval(int interval)

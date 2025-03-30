@@ -11,11 +11,11 @@ struct hash_entry {
 	uint64_t dst;
 };
 
-void for_all_hash(void (*f)(struct hash_entry*, void*), void* arg);
+void for_all_hash(void (*f)(struct hash_entry*, struct comparameter*), struct comparameter* param);
 void HashInit(uint32_t hash_size);
 void delete_hash_entry(struct hash_entry* OLD);
 struct hash_entry* find_entry(uint64_t MAC);
-void delete_port_iterator(struct hash_entry* e, void* arg);
-void hash_delete_port(int port);
+int delete_port_iterator(struct hash_entry* e, struct comparameter* param);
+int hash_delete_port(struct comparameter* param);
 int find_in_hash(unsigned char* dst, int vlan);
 int find_in_hash_update(unsigned char* src, int vlan, int port);
