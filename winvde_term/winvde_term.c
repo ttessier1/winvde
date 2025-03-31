@@ -126,7 +126,7 @@ int main(const int argc, const char** argv)
 				}
 				SaveCursorPos();
 			}
-			if (wsaPollFD[1].revents & POLLOUT && bufferReady == 1)
+			if (wsaPollFD[1].revents & POLLOUT && bufferReady == 1 && std_input_pos>0)
 			{
 
 				if (vdehist_term_to_mgmt(vdehst, std_input_buffer, std_input_pos) != 0)
@@ -141,6 +141,17 @@ int main(const int argc, const char** argv)
 				std_input_pos = 0;
 				std_input_length = 0;
 				bufferReady = 0;
+			}
+			if (bufferReady == 1 && std_input_pos == 0)
+			{
+				fprintf(stdout, "\n\033[32m%.*s\033[0m", (int)strlen(prompt) + 1, prompt);
+				SaveCursorPos();
+				std_input_buffer[std_input_length + 1] = '\0';
+				addCommandHistory(&cmd_history, std_input_buffer, std_input_length);
+				std_input_pos = 0;
+				std_input_length = 0;
+				bufferReady = 0;
+
 			}
 			if ((wsaPollFD[0].revents & POLLHUP) ||
 				(wsaPollFD[1].revents & POLLHUP) )
