@@ -11,6 +11,7 @@
 #include "winvde_output.h"
 #include "winvde_printfunc.h"
 #include "winvde_memorystream.h"
+#include "winvde_mgmt.h"
 
 #if defined(VDEPLUGIN)
 
@@ -35,7 +36,7 @@ int pluginlist(struct comparameter * parameter)
 	int rv = ENOENT;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_file &&
@@ -69,7 +70,7 @@ int pluginlist(struct comparameter * parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, PLUGINFMT, "------------------------------", "----------------------------------------");
@@ -80,7 +81,7 @@ int pluginlist(struct comparameter * parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 
@@ -96,7 +97,7 @@ int pluginlist(struct comparameter * parameter)
 				}
 				else
 				{
-					errno = ENOMEM;
+					switch_errno = ENOMEM;
 					return -1;
 				}
 				rv = 0;
@@ -117,7 +118,7 @@ int pluginlist(struct comparameter * parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, PLUGINFMT, "------------------------------", "----------------------------------------");
@@ -128,7 +129,7 @@ int pluginlist(struct comparameter * parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		
@@ -144,7 +145,7 @@ int pluginlist(struct comparameter * parameter)
 				}
 				else
 				{
-					errno = ENOMEM;
+					switch_errno = ENOMEM;
 					return -1;
 				}
 				rv = 0;
@@ -154,7 +155,7 @@ int pluginlist(struct comparameter * parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }
@@ -221,7 +222,7 @@ int pluginadd(struct comparameter * parameter)
 	int rv = ENOENT;
 	if(!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null && 
@@ -238,14 +239,14 @@ int pluginadd(struct comparameter * parameter)
 				{
 					fprintf(stderr, "Plugin name does not match plugin name expectation\n");
 					FreeLibrary(handle);
-					errno = EINVAL;
+					switch_errno = EINVAL;
 					rv = EINVAL;
 				}
 				if (strcmp(plugin_struct->name, parameter->paramValue.stringValue) != 0)
 				{
 					fprintf(stderr, "Plugin name does not match plugin name requested\n");
 					FreeLibrary(handle);
-					errno = EINVAL;
+					switch_errno = EINVAL;
 					rv = EINVAL;
 				}
 				else
@@ -272,7 +273,7 @@ int pluginadd(struct comparameter * parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }
@@ -284,7 +285,7 @@ int plugindel(struct comparameter * parameter) {
 	struct plugin* _this = NULL;
 	if (!parameter || !p)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null &&
@@ -314,7 +315,7 @@ int plugindel(struct comparameter * parameter) {
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }

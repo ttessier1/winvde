@@ -7,6 +7,7 @@
 #include "winvde_debugcl.h"
 #include "winvde_printfunc.h"
 #include "winvde_ev.h"
+#include "winvde_mgmt.h"
 
 #if defined(DEBUGOPT)
 
@@ -19,7 +20,7 @@ void adddbgcl(size_t ncl, struct dbgcl* cl)
 	size_t index = 0;
 	if (ncl <= 0||!cl)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return;
 	}
 	for (index = 0; index < ncl; index++, cl++)
@@ -36,7 +37,7 @@ void deldbgcl(size_t ncl, struct dbgcl* cl)
 	struct dbgcl** p = NULL;
 	if (ncl <= 0 || cl == NULL)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return;
 	}
 	for (index = 0; index < (uint32_t)ncl; index++, cl++)

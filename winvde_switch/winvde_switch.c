@@ -166,7 +166,7 @@ int gettimeofday(struct timeval* tv)
     const ULONGLONG epoch_offset = 11644473600000000ULL;
     if (!tv)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return -1;
     }
 #if WIN32_WINNT >= _WIN32_WINNT_WIN8
@@ -254,10 +254,10 @@ void SetSignalHandlers()
     {
         if (signal(signals[index].sig, signals[index].ignore ? SIG_IGN : sig_handler) < 0)
         {
-            strerror_s(errorbuff, sizeof(errorbuff), errno);
+            strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
             fprintf(stderr, "Setting Handler for %s: %s\n", signals[index].name, errorbuff);
 #if defined(LOGGING)
-            //printlog(LOG_ERR, "Setting handler for %s: %s", signals[index].name, strerror(errno));
+            //printlog(LOG_ERR, "Setting handler for %s: %s", signals[index].name, strerror(switch_errno));
 #endif
         }
     }
@@ -608,7 +608,7 @@ void main_loop()
         if (pollable_fds||firstLoop==1)
         {
             firstLoop = 0;
-            errno = 0;
+            switch_errno = 0;
             if (last_descriptor_count != number_of_filedescriptors)
             {
                 last_descriptor_count = number_of_filedescriptors;
@@ -659,7 +659,7 @@ void main_loop()
             n = WSAPoll(pollable_fds, pollable_count, 0);
             if (n < 0)
             {
-                strerror_s(errorbuff, sizeof(errorbuff), errno);
+                strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
                 printlog(LOG_WARNING, "poll %s %d", errorbuff, WSAGetLastError());
                 break;
             }

@@ -13,6 +13,7 @@
 #include "winvde_event.h"
 #include "winvde_sockutils.h"
 #include "winvde_memorystream.h"
+#include "winvde_mgmt.h"
 
 
 #if defined(DEBUGOPT)
@@ -33,7 +34,7 @@ int debuglist(struct comparameter* parameter)
 	
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_socket && 
@@ -51,7 +52,7 @@ int debuglist(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, DEBUGFORMAT1, "------------", "---", "------", "----");
@@ -62,7 +63,7 @@ int debuglist(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		for (p = dbg_cl_header; p != NULL; p = p->next)
@@ -82,7 +83,7 @@ int debuglist(struct comparameter* parameter)
 				}
 				else
 				{
-					errno = ENOMEM;
+					switch_errno = ENOMEM;
 					return -1;
 				}
 			}
@@ -103,7 +104,7 @@ int debuglist(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, DEBUGFORMAT1, "------------", "---", "------", "----");
@@ -114,7 +115,7 @@ int debuglist(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		for (p = dbg_cl_header; p != NULL; p = p->next)
@@ -134,7 +135,7 @@ int debuglist(struct comparameter* parameter)
 				}
 				else
 				{
-					errno = ENOMEM;
+					switch_errno = ENOMEM;
 					return -1;
 				}
 			}
@@ -150,7 +151,7 @@ int debugadd(struct comparameter* parameter)
 	int index;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -214,7 +215,7 @@ int debugdel(struct comparameter* parameter) {
 	int rv = EINVAL;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -272,7 +273,7 @@ int packet_filter(struct dbgcl* cl, unsigned short port, char* buff, int length)
 	int returnValue = 0;
 	if (!cl)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	for (index = 0; index < cl->nfun && length>0; index++)

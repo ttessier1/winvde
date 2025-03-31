@@ -9,6 +9,7 @@
 #include "winvde_module.h"
 #include "winvde_switch.h"
 #include "winvde_output.h"
+#include "winvde_mgmt.h"
 
 struct winvde_module** fdtypes;
 
@@ -26,7 +27,7 @@ unsigned char add_type(struct winvde_module* mgr, int prio)
 			exit(1);
 		}
 		if ((fdtypes = (struct winvde_module**)realloc(fdtypes, maxtypes * sizeof(struct winvde_module*))) == NULL) {
-			strerror_s(errorbuff,sizeof(errorbuff),errno);
+			strerror_s(errorbuff,sizeof(errorbuff),switch_errno);
 			printlog(LOG_ERR, "realloc fdtypes %s", errorbuff);
 			exit(1);
 		}

@@ -57,6 +57,7 @@ unsigned int console_type = -1;
 unsigned int mgmt_ctl = -1;
 unsigned int mgmt_data = -1;
 unsigned int mgmt_group = -1;
+uint32_t switch_errno = 0;
 
 char pidfile_path[MAX_PATH];
 
@@ -231,7 +232,7 @@ int mgmt_init()
 	/* saves current path in pidfile_path, because otherwise with daemonize() we
 	 *    * forget it */
 	if (_getcwd(pidfile_path, MAX_PATH - 2) == NULL) {
-		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 		printlog(LOG_ERR, "getcwd: %s", errorbuff);
 		exit(1);
 	}
@@ -239,7 +240,7 @@ int mgmt_init()
 	if (DoDaemonize ) {
 
 		RunDaemon();
-		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 		printlog(LOG_ERR, "daemon: %s", errorbuff);
 		exit(1);
 	}
@@ -257,31 +258,31 @@ int mgmt_init()
 		int one = 1;
 
 		if ((mgmtconnfd = socket(PF_UNIX, SOCK_STREAM, 0)) < 0) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_ERR, "mgmt socket: %s", errorbuff);
 			return -1;
 		}
 		
 		/*if (setsockopt(mgmtconnfd, SOL_SOCKET, SO_REUSEADDR, (char*)&one, sizeof(one)) < 0) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_ERR, "mgmt setsockopt: %s", errorbuff);
 			return;
 		}*/
 		if(ioctlsocket(mgmtconnfd, FIONBIO,&one)==SOCKET_ERROR)
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_ERR, "Setting O_NONBLOCK on mgmt fd: %s", errorbuff);
 			return -1;
 		}
 		sun.sun_family = PF_UNIX;
 		snprintf(sun.sun_path, sizeof(sun.sun_path), "%s", mgmt_socket);
 		if (bind(mgmtconnfd, (struct sockaddr*)&sun, sizeof(sun)) < 0) {
-			if ((errno == EADDRINUSE) && still_used(&sun))
+			if ((switch_errno == EADDRINUSE) && still_used(&sun))
 			{
 				return -1;
 			}
 			else if (bind(mgmtconnfd, (struct sockaddr*)&sun, sizeof(sun)) < 0) {
-				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 				printlog(LOG_ERR, "mgmt bind %s", errorbuff);
 				return -1;
 			}
@@ -289,7 +290,7 @@ int mgmt_init()
 		// Do not set permissions
 		//setmgmtperm(sun.sun_path);
 		if (listen(mgmtconnfd, 15) < 0) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_ERR, "mgmt listen: %s", errorbuff);
 			return -1;
 		}
@@ -322,7 +323,7 @@ int mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_dat
 			n = recv(fd, buf, sizeof(buf),0);
 			if (n < 0)
 			{
-				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 				printlog(LOG_WARNING, "Reading from mgmt %s",errorbuff);
 				return -1;
 			}
@@ -393,13 +394,13 @@ int mgmt_handle_io(unsigned char type, SOCKET fd, int revents, void* private_dat
 		new = accept(fd, NULL, NULL);
 		if (new == INVALID_SOCKET)
 		{
-			strerror_s(errorbuff,sizeof(errorbuff),errno);
+			strerror_s(errorbuff,sizeof(errorbuff),switch_errno);
 			printlog(LOG_WARNING, "mgmt accept %s", errorbuff);
 			return -1;
 		}
 		if (ioctlsocket(new, FIONBIO, &one) == SOCKET_ERROR)
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "mgmt fcntl - setting O_NONBLOCK %s", errorbuff);
 			closesocket(new);
 			return -1;
@@ -420,7 +421,7 @@ void mgmt_cleanup(unsigned char type, SOCKET fd, void* private_data)
 	{
 		if ((pidfile != NULL) && _unlink(pidfile_path) < 0)
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "Couldn't remove pidfile '%s': %s", pidfile, errorbuff);
 		}
 	}
@@ -439,7 +440,7 @@ int vde_logout(struct comparameter * parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return - 1;
 	}
 	if (parameter->type1 == com_type_null && parameter->type2 == com_type_null && parameter->paramType == com_param_type_null)
@@ -454,7 +455,7 @@ int vde_shutdown(struct comparameter* parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null && parameter->type2 == com_type_null && parameter->paramType== com_param_type_null)
@@ -462,7 +463,7 @@ int vde_shutdown(struct comparameter* parameter)
 		printlog(LOG_WARNING, "Shutdown from mgmt command");
 		return -2;
 	}
-	errno = EINVAL;
+	switch_errno = EINVAL;
 	return -1;
 }
 
@@ -472,7 +473,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 	size_t length;
 	if (parameter == NULL)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor!=NULL)
@@ -496,7 +497,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d\n", _getpid(),
@@ -509,7 +510,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "mgmt %s perm 0%03o\n", mgmt_socket, mgmt_mode);
@@ -522,7 +523,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 			}
 			else
 			{
-				errno = ENOMEM;
+				switch_errno = ENOMEM;
 				return -1;
 			}
 		}
@@ -537,7 +538,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "pid %d MAC %02x:%02x:%02x:%02x:%02x:%02x uptime %d\n", _getpid(),
@@ -550,7 +551,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "mgmt %s perm 0%03o\n", mgmt_socket, mgmt_mode);
@@ -563,7 +564,7 @@ int mgmt_showinfo(struct comparameter* parameter)
 			}
 			else
 			{
-				errno = ENOMEM;
+				switch_errno = ENOMEM;
 				return -1;
 			}
 		}
@@ -578,7 +579,7 @@ int runscript(struct comparameter* parameter)
 	char buf[MAXCMD];
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -593,7 +594,7 @@ int runscript(struct comparameter* parameter)
 
 			if (script_file == NULL)
 			{
-				return errno;
+				return switch_errno;
 			}
 			else
 			{
@@ -634,12 +635,12 @@ int help(struct comparameter* parameter)
 	size_t length = 0;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor == NULL)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_file && parameter->paramType==com_param_type_string&& parameter->paramValue.stringValue!=NULL)
@@ -749,7 +750,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 	char* sprintBuff = NULL;
 	if (!input_buffer)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	
@@ -768,6 +769,11 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 			for (p = clh; p != NULL && (p->doit == NULL || strncmp(p->path, input_buffer, strlen(p->path)) != 0); p = p->next)
 			{
 				;
+			}
+			if (p == NULL && strcmp(input_buffer,"\n")!=0)
+			{
+				switch_errno = EINVAL;
+				rv = 1;
 			}
 			if (p != NULL)
 			{
@@ -889,7 +895,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 			}
 			else if (rv > 0)
 			{
-				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 				if (asprintf(&sprintBuff, "1%03d %s", rv, errorbuff)!=-1)
 				{
 
@@ -909,7 +915,7 @@ int handle_cmd(int type, SOCKET socketDescriptor, char* input_buffer)
 		else
 		{
 			fprintf(stderr,"Failed to open the memory stream\n");
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 	}
@@ -976,9 +982,9 @@ void save_pidfile()
 
 	
 	FILE* fileHandle = NULL;
-	errno = fopen_s(&fileHandle, pidfile_path, "w");
-	if (errno != 0 || fileHandle==NULL) {
-		strerror_s(errorbuff,sizeof(errorbuff),errno);
+	switch_errno = fopen_s(&fileHandle, pidfile_path, "w");
+	if (switch_errno != 0 || fileHandle==NULL) {
+		strerror_s(errorbuff,sizeof(errorbuff),switch_errno);
 		printlog(LOG_ERR, "Error in pidfile creation: %s",errorbuff);
 		exit(1);
 	}
@@ -996,7 +1002,7 @@ void mgmtnewfd(SOCKET new)
 	DWORD one = 1;
 	if (ioctlsocket(new, FIONBIO, &one)==SOCKET_ERROR)
 	{
-		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 		printlog(LOG_WARNING, "mgmt fcntl - setting O_NONBLOCK: %s - %d\n", errorbuff, WSAGetLastError());
 		closesocket(new);
 		return;

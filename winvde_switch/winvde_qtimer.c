@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "winvde_qtimer.h"
+#include "winvde_mgmt.h"
 
 #define QT_ALLOC_STEP 4
 #define SIGALARM SIGTERM
@@ -132,7 +133,7 @@ int qtimer_init()
 	if (!ghMutex)
 	{
 		fprintf(stderr, __FUNCTION__ ":Failed to create the mutex\n");
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	timerId = SetTimer(NULL,0x1234,1000, (TIMERPROC)sig_alarm);
@@ -140,7 +141,7 @@ int qtimer_init()
 	{
 		CloseHandle(ghMutex);
 		ghMutex = NULL;
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	return 0;
@@ -158,7 +159,7 @@ unsigned int qtimer_add(time_t period, int times, void(*call)(), void * arg)
 			qt_head = (struct qt_timer**)realloc(qt_head,newmaxqt*sizeof(struct qt_timer *));
 			if (qt_head == NULL)
 			{
-				errno = ENOMEM;
+				switch_errno = ENOMEM;
 				return -1;
 			}
 			qt_size = newmaxqt;
@@ -169,7 +170,7 @@ unsigned int qtimer_add(time_t period, int times, void(*call)(), void * arg)
 			qt_free = malloc(sizeof(struct qt_timer));
 			if (qt_free == NULL)
 			{
-				errno = ENOMEM;
+				switch_errno = ENOMEM;
 				return -1;
 			}
 			qt_free->qt_arg = NULL;
@@ -193,7 +194,7 @@ void qtimer_del(unsigned int timer_id)
 	uint32_t index = 0;
 	if (active_timers <= 0)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return;
 	}
 	for (index = 0; index < (uint32_t)active_timers; index++)

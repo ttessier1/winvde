@@ -1,4 +1,5 @@
 #include "winvde_getopt.h"
+#include "winvde_mgmt.h"
 
 int opterr = 1 ;
 int optind = 1 ;
@@ -12,7 +13,7 @@ int getopt(int nargc, const char* *nargv, const char* ostr)
     char* option_letter_index = NULL;
     if (nargc <= 0 || nargv == NULL || ostr == NULL)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return -1;
     }
     if (optreset==1)
@@ -24,7 +25,7 @@ int getopt(int nargc, const char* *nargv, const char* ostr)
             *(argument_place = (char*)nargv[optind]) != '-')
         {
             argument_place = EMSG;
-            errno = EINVAL;
+            switch_errno = EINVAL;
             return -1;
         }
         if (argument_place[1] && *--argument_place == '-') // did we find --
@@ -98,7 +99,7 @@ int getopt_long(const int nargc, const char **nargv, const char* ostr, struct op
     struct option* ptr = NULL;
     if (nargc <= 0 || nargv == NULL || ostr == NULL || long_options == NULL || index==NULL)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return -1;
     }
     if (optreset == 1||!*argument_place)
@@ -110,7 +111,7 @@ int getopt_long(const int nargc, const char **nargv, const char* ostr, struct op
             *(argument_place = (char*)nargv[optind]) != '-')
         {
             argument_place = EMSG;
-            errno = EINVAL;
+            switch_errno = EINVAL;
             return -1;
         }
         if (argument_place[1] && *++argument_place == '-') // did we find --
@@ -135,7 +136,7 @@ int getopt_long(const int nargc, const char **nargv, const char* ostr, struct op
             }
             fprintf(stderr, "illegal option -- %s\n", argument_place);
             argument_place = EMSG;
-            errno = EINVAL;
+            switch_errno = EINVAL;
             return -1;
         }
     }

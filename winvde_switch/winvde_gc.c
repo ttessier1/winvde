@@ -5,6 +5,7 @@
 #include "winvde_hash.h"
 #include "winvde_comlist.h"
 #include "winvde_qtimer.h"
+#include "winvde_mgmt.h"
 
 
 int gc_interval = 0;
@@ -34,7 +35,7 @@ int hash_set_gc_interval(struct comparameter * parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
@@ -45,7 +46,7 @@ int hash_set_gc_interval(struct comparameter * parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	return 0;
@@ -56,7 +57,7 @@ int hash_set_gc_expire(struct comparameter* parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
@@ -65,7 +66,7 @@ int hash_set_gc_expire(struct comparameter* parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	return 0;

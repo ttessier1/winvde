@@ -17,7 +17,9 @@
 #include "winvde_debugopt.h"
 #include "winvde_event.h"
 #include "winvde_printfunc.h"
+#include "winvde_mgmt.h"
 #include "winvde_memorystream.h"
+#include "winvde_mgmt.h"
 
 #ifdef DEBUGOPT
 #define DBGHASHNEW (hash_dl) 
@@ -140,7 +142,7 @@ int showinfo(struct comparameter* parameter)
 	size_t length = 0;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_file && parameter->data1.file_descriptor != NULL)
@@ -161,7 +163,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "GC interval %d secs\n", gc_interval);
@@ -172,7 +174,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "GC expire %d secs\n", gc_expire);
@@ -183,7 +185,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "Min persistence %d secs\n", min_persistence);
@@ -194,7 +196,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		return 0;
@@ -209,7 +211,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "GC interval %d secs\n", gc_interval);
@@ -220,7 +222,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "GC expire %d secs\n", gc_expire);
@@ -231,7 +233,7 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		length = asprintf(&tmpBuff, "Min persistence %d secs\n", min_persistence);
@@ -242,14 +244,14 @@ int showinfo(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 		return 0;
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }
@@ -259,7 +261,7 @@ int print_hash(struct comparameter* parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -294,7 +296,7 @@ int print_hash(struct comparameter* parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	return 0;
@@ -306,7 +308,7 @@ int print_hash_entry(struct hash_entry* hash_entry_value, struct comparameter* p
 	size_t length = 0;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -342,7 +344,7 @@ int print_hash_entry(struct hash_entry* hash_entry_value, struct comparameter* p
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 	}
@@ -365,16 +367,16 @@ int print_hash_entry(struct hash_entry* hash_entry_value, struct comparameter* p
 		}
 		else
 		{
-			errno = ENOMEM;
+			switch_errno = ENOMEM;
 			return -1;
 		}
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
-	errno = EINVAL;
+	switch_errno = EINVAL;
 	return -1;
 }
 
@@ -406,7 +408,7 @@ int find_in_hash_update(unsigned char* src, int vlan, int port)
 		e = (struct hash_entry*)malloc(sizeof(*e));
 		if (e == NULL)
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "Failed to malloc hash entry %s", errorbuff);
 			return -1;
 		}
@@ -456,7 +458,7 @@ int find_hash(struct comparameter* parameter)
 	struct hash_entry* hash_entry_value = NULL;
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (strchr(parameter->paramValue.stringValue, ':') != NULL)
@@ -486,7 +488,7 @@ int find_hash(struct comparameter* parameter)
 
 			if (hash_entry_value == NULL)
 			{
-				errno = ENODEV;
+				switch_errno = ENODEV;
 				return 0;
 			}
 			else
@@ -509,7 +511,7 @@ int find_hash(struct comparameter* parameter)
 
 			if (hash_entry_value == NULL)
 			{
-				errno = ENODEV;
+				switch_errno = ENODEV;
 				return 0;
 			}
 			else
@@ -536,7 +538,7 @@ int find_hash(struct comparameter* parameter)
 		{
 			if (hash_entry_value == NULL)
 			{
-				errno = ENODEV;
+				switch_errno = ENODEV;
 				return 0;
 			}
 			else
@@ -558,7 +560,7 @@ int find_hash(struct comparameter* parameter)
 		}
 		else
 		{
-			errno = EINVAL;
+			switch_errno = EINVAL;
 			return -1;
 		}
 	}
@@ -569,7 +571,7 @@ int hash_resize(struct comparameter * parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
@@ -590,7 +592,7 @@ int hash_resize(struct comparameter * parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }
@@ -601,7 +603,7 @@ int hash_set_minper(struct comparameter* parameter)
 {
 	if (!parameter)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (parameter->type1 == com_type_null && parameter->paramType == com_param_type_int)
@@ -610,7 +612,7 @@ int hash_set_minper(struct comparameter* parameter)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	return 0;
@@ -674,7 +676,7 @@ void hash_flush()
 //TODO: dont exit on failure
 // save the existing set, try to allocate a new set
 // on success copy over and return 0
-// on failure return -1 and set errno appropriately
+// on failure return -1 and set switch_errno appropriately
 void HASH_INIT(int BIT)
 {
 	hash_bits = (BIT);
@@ -682,7 +684,7 @@ void HASH_INIT(int BIT)
 	{
 		hash_mask = (uint32_t)HASH_SIZE - 1;
 		if ((hash_head = (struct hash_entry**)calloc((size_t)HASH_SIZE, sizeof(struct hash_entry*))) == NULL) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "Failed to malloc hash table %s", errorbuff);
 			exit(1);
 		}
@@ -699,7 +701,7 @@ int delete_port_iterator(struct hash_entry* e, struct comparameter* param)
 	int pport = 0 ;
 	if (!param||!e)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -716,13 +718,13 @@ int delete_port_iterator(struct hash_entry* e, struct comparameter* param)
 		}
 		else
 		{
-			errno = EINVAL;
+			switch_errno = EINVAL;
 			return -1;
 		}
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }
@@ -731,7 +733,7 @@ int hash_delete_port(struct comparameter* param)
 {
 	if (!param)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
@@ -747,7 +749,7 @@ int hash_delete_port(struct comparameter* param)
 	}
 	else
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 }

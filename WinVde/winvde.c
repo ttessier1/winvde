@@ -9,8 +9,8 @@
 #include <winvdeplugmodule.h>
 
 
-#define STDSWITCH "\\.winvdeplug\\default"
-#define OLDSTDSWITCH "\\.vde2\\default.switch"
+#define STDSWITCH "\\.winvde2\\default"
+#define OLDSTDSWITCH "\\.winvde2\\default.switch"
 
 #define STD_LIB_PATH "\\lib:\\usr\\lib"
 #define LIBWINVDEPLUG "libwinvdeplug_"
@@ -147,7 +147,6 @@ WINVDECONN* winvde_open_module(const char* modname, struct winvde_open_parameter
 		{
 			retval = winvde_open_samedir(modname,LIBWINVDEPLUGIN, parameters);
 			if (retval != NULL || errno != EPROTONOSUPPORT) {
-				retval->opened = FALSE;
 				return retval;
 			}
 			retval = winvde_open_samedir(modname, "\\" LIBWINVDEPLUGIN, parameters);

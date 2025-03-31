@@ -10,6 +10,7 @@
 #include "winvde_loglevel.h"
 #include "winvde_output.h"
 #include "winvde_switch.h"
+#include "winvde_mgmt.h"
 
 int maxfds = 0;
 int nprio = 0;
@@ -34,12 +35,12 @@ void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* pri
 	if (number_of_filedescriptors == maxfds) {
 		maxfds = maxfds ? maxfds + MAXFDS_STEP : MAXFDS_INITIAL;
 		if ((fds = (struct pollfd*)realloc(fds, maxfds * sizeof(struct pollfd))) == NULL) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_ERR, "realloc fds %s", errorbuff);
 			exit(1);
 		}
 		if ((fdpp = (struct pollplus**)realloc(fdpp, maxfds * sizeof(struct pollplus*))) == NULL) {
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_ERR, "realloc pollplus %s", errorbuff);
 			exit(1);
 		}
@@ -49,7 +50,7 @@ void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* pri
 		fdpermsize = ((fd >> FDPERMSIZE_LOGSTEP) + 1) << FDPERMSIZE_LOGSTEP;
 		if ((fdperm = (short*)realloc(fdperm, fdpermsize * sizeof(short))) == NULL)
 		{
-			strerror_s(errorbuff,sizeof(errorbuff),errno);
+			strerror_s(errorbuff,sizeof(errorbuff),switch_errno);
 			printlog(LOG_ERR, "realloc fdperm %s", errorbuff);
 			exit(1);
 		}
@@ -66,7 +67,7 @@ void add_fd(SOCKET fd, unsigned char type, unsigned char module_index, void* pri
 		index = number_of_filedescriptors;
 	}
 	if ((fdpp[index] = malloc(sizeof(struct pollplus))) == NULL) {
-		strerror_s(errorbuff, sizeof(errorbuff), errno);
+		strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 		printlog(LOG_ERR, "realloc pollplus elem %s", errorbuff);
 		exit(1);
 	}

@@ -3,6 +3,7 @@
 
 #include "winvde_event.h"
 #include "winvde_debugcl.h"
+#include "winvde_mgmt.h"
 
 #if defined(DEBUGOPT)
 
@@ -11,7 +12,7 @@ int eventadd(int (*fun)(struct dbgcl*), char* path, void* arg) {
 	int rv = EINVAL;
 	if (!fun || !path)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	for (p = dbg_cl_header; p != NULL; p = p->next)

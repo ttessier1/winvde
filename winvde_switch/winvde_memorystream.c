@@ -10,6 +10,8 @@
 #include <string.h>
 #include <limits.h>
 
+#include "winvde_mgmt.h"
+
 #define MEMORY_BUFFER_SIZE 1024
 
 typedef struct _buffer_chain
@@ -41,7 +43,7 @@ struct _memory_file* open_memorystream(char** buffer, size_t** size)
     struct _memory_file* memorybuffer = NULL;
     if (!buffer || !size)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return NULL;
     }
     memorybuffer = (struct _memory_file*)malloc(sizeof(struct _memory_file));
@@ -63,7 +65,7 @@ struct _memory_file* open_memorystream(char** buffer, size_t** size)
         {
             free(memorybuffer);
             memorybuffer = NULL;
-            errno = ENOMEM;
+            switch_errno = ENOMEM;
             return NULL;
         }
     }
@@ -78,12 +80,12 @@ size_t write_memorystream(struct _memory_file* file, const char* buff, size_t bu
     size_t buffoffset = 0;
     if (!file || !buff || buffsize == 0)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return -1;
     }
     if (file->buffer_pos >= MEMORY_BUFFER_SIZE)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return -1;
     }
     remaining = MEMORY_BUFFER_SIZE - file->buffer_pos;
@@ -120,7 +122,7 @@ size_t write_memorystream(struct _memory_file* file, const char* buff, size_t bu
         }
         else
         {
-            errno = ENOMEM;
+            switch_errno = ENOMEM;
             return -1;
         }
     }
@@ -135,7 +137,7 @@ char* get_buffer(struct _memory_file* file)
     size_t pos = 0;
     if (!file)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return NULL;
     }
     file->final_buffer = (char*)malloc(file->size + 1);

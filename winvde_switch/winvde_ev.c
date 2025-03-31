@@ -4,7 +4,9 @@
 #include <errno.h>
 #include <io.h>
 #include <stdlib.h>
+
 #include "winvde_ev.h"
+#include "winvde_mgmt.h"
 
 
 size_t readv(SOCKET fd, struct iovec* iov, int iovcnt)
@@ -14,7 +16,7 @@ size_t readv(SOCKET fd, struct iovec* iov, int iovcnt)
 	int index = 0;
 	if (fd == INVALID_SOCKET||iov ==NULL || iovcnt<=0)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	for (index = 0; index < iovcnt; index++)
@@ -30,13 +32,13 @@ size_t readv(SOCKET fd, struct iovec* iov, int iovcnt)
 			iov[index].iov_base = (char*)malloc(iov[index].iov_len);
 			if (!iov[index].iov_base)
 			{
-				errno = ENOMEM;
+				switch_errno = ENOMEM;
 				break;
 			}
 			bytesRead = recv(fd, iov[index].iov_base, (int)iov[index].iov_len,0);
 			if (bytesRead != iov[index].iov_len)
 			{
-				errno = EFAULT;
+				switch_errno = EFAULT;
 				break;
 			}
 		}
@@ -56,7 +58,7 @@ size_t writev(SOCKET fd, struct iovec* iov, int iovcnt)
 	int index = 0;
 	if (fd == -1 || iov == NULL || iovcnt <= 0)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	for (index = 0; index < iovcnt; index++)
@@ -64,7 +66,7 @@ size_t writev(SOCKET fd, struct iovec* iov, int iovcnt)
 		bytesWritten = send(fd, (char*) & iov[index].iov_len, sizeof(size_t), 0);
 		if (bytesWritten != sizeof(size_t))
 		{
-			errno = EFAULT;
+			switch_errno = EFAULT;
 			break;
 		}
 		totalBytesWritten += bytesWritten;
@@ -73,7 +75,7 @@ size_t writev(SOCKET fd, struct iovec* iov, int iovcnt)
 			bytesWritten = send(fd, iov[index].iov_base, (uint32_t)iov[index].iov_len,0);
 			if (bytesWritten != iov[index].iov_len)
 			{
-				errno = EFAULT;
+				switch_errno = EFAULT;
 				break;
 			}
 			totalBytesWritten += bytesWritten;

@@ -11,6 +11,7 @@
 
 #include "winvde_common.h"
 #include "winvde_switch.h"
+#include "winvde_mgmt.h"
 
 #define MAXSYMLINKS 1000
 
@@ -30,7 +31,7 @@ char* winvde_realpath(const char* name, char* resolved)
 	size_t n=0;
 	if (!name || !resolved)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		goto abort;
 	}
 	resolved_ptr = resolved;
@@ -39,17 +40,17 @@ char* winvde_realpath(const char* name, char* resolved)
 	{
 		/* As per Single Unix Specification V2 we must return an error if
 		   the name argument points to an empty string.  */
-		errno = ENOENT;
+		switch_errno = ENOENT;
 		goto abort;
 	}
 
 	if ((buf = (char*)malloc(MAX_PATH + 1)) == NULL) {
-		errno = ENOMEM;
+		switch_errno = ENOMEM;
 		goto abort;
 	}
 	
 	if ((extra_buf = (char*)malloc(MAX_PATH+1)) == NULL) {
-		errno = ENOMEM;
+		switch_errno = ENOMEM;
 		goto abort;
 	}
 
@@ -119,7 +120,7 @@ char* winvde_realpath(const char* name, char* resolved)
 
 			if (dest + (end - start) >= resolved_limit)
 			{
-				errno = ENAMETOOLONG;
+				switch_errno = ENAMETOOLONG;
 				if (dest > resolved_root)
 					dest--;
 				*dest = '\0';
@@ -143,7 +144,7 @@ char* winvde_realpath(const char* name, char* resolved)
 
 					if (++num_links > MAXSYMLINKS)
 					{
-						errno = ELOOP;
+						switch_errno = ELOOP;
 						goto abort;
 					}
 
@@ -158,7 +159,7 @@ char* winvde_realpath(const char* name, char* resolved)
 					len = strlen(end);
 					if ((long)(n + len) >= MAX_PATH)
 					{
-						errno = ENAMETOOLONG;
+						switch_errno = ENAMETOOLONG;
 						goto abort;
 					}
 
@@ -186,14 +187,14 @@ char* winvde_realpath(const char* name, char* resolved)
 				}
 				else if (*end == '\\' && (pst.st_mode & S_IFDIR) == 0)
 				{
-					errno = ENOTDIR;
+					switch_errno = ENOTDIR;
 					goto abort;
 				}
 				else if (*end == '\\')
 				{
 					if (_access(resolved, R_OK) != 0)
 					{
-						errno = EACCES;
+						switch_errno = EACCES;
 						goto abort;
 					}
 				}
@@ -222,7 +223,7 @@ int winvde_stat(const char* filename, struct winvde_stat* stat)
 	struct _stat64 stat_real;
 	if (!filename || !stat)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	rc = _stat64(filename, &stat_real);
@@ -258,7 +259,7 @@ size_t winvde_readlink(const char* path, char* buffer, size_t bufsize)
 	char* file=NULL;
 	if (!path || !buffer || bufsize == 0)
 	{
-		errno = EINVAL;
+		switch_errno = EINVAL;
 		return -1;
 	}
 	hFile = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
@@ -288,21 +289,21 @@ int main()
 	char* resolved = NULL;
 	FILE* file = NULL;
 	size_t length = 0;
-	if (_stat64("link", &stat) == -1 && errno == ENOENT)
+	if (_stat64("link", &stat) == -1 && switch_errno == ENOENT)
 	{
 		fprintf(stdout, "Link file does not exist\n");
-		if (_stat64("actual_file.txt", &stat) == -1 && errno == ENOENT)
+		if (_stat64("actual_file.txt", &stat) == -1 && switch_errno == ENOENT)
 		{
 			fprintf(stdout, "Actual file does not exist\n");
-			errno = fopen_s(&file,"actual_file.txt", "w");
-			if (errno == 0 && file != NULL)
+			switch_errno = fopen_s(&file,"actual_file.txt", "w");
+			if (switch_errno == 0 && file != NULL)
 			{
 				fprintf(stdout, "Created Actual file\n");
 				fclose(file);
 			}
 			else
 			{
-				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 				fprintf(stderr, "Failed to create Actual file: %s\n", errorbuff);
 				exit(0xffffffff);
 			}
@@ -314,7 +315,7 @@ int main()
 		// Requires admin
 		if (!CreateSymbolicLinkA("link", "actual_file.txt", SYMBOLIC_LINK_FLAG_FILE))
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			fprintf(stderr, "Failed to create symbolic link: %s %d\n", errorbuff, GetLastError());
 			exit(0xffffffff);
 		}

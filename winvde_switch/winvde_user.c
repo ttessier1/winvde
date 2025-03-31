@@ -9,6 +9,7 @@
 #pragma comment(lib,"Netapi32.lib")
 
 #include "winvde_user.h"
+#include "winvde_mgmt.h"
 
 
 wchar_t * GetUserNameFunction()
@@ -195,14 +196,14 @@ struct group * GetGroupFunction(const char * groupName)
   
     if (!groupName)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return NULL;
     }
     nameLength = strlen(groupName);
     wideGroupName = malloc(sizeof(wchar_t) * (nameLength + 1));
     if (!wideGroupName)
     {
-        errno = ENOMEM;
+        switch_errno = ENOMEM;
         return NULL;
     }
     mbtowc(wideGroupName, groupName, nameLength);
@@ -252,7 +253,7 @@ struct group* GetGroupFunctionW(const wchar_t* groupName)
 
     if (!groupName)
     {
-        errno = EINVAL;
+        switch_errno = EINVAL;
         return NULL;
     }
     nameLength = wcslen(groupName);

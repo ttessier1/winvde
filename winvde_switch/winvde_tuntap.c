@@ -20,6 +20,7 @@
 #include "winvde_descriptor.h"
 #include "winvde_modsupport.h"
 #include "winvde_type.h"
+#include "winvde_mgmt.h"
 
 static WINTUN_CREATE_ADAPTER_FUNC* WintunCreateAdapter;
 static WINTUN_CLOSE_ADAPTER_FUNC* WintunCloseAdapter;
@@ -213,10 +214,10 @@ int send_tap(SOCKET fd_ctl, SOCKET fd_data, void* packet, int len, uint16_t port
 
 	n = len - send(fd_ctl, packet, len,0);
 	if (n > len) {
-		int rv = errno;
+		int rv = switch_errno;
 		if (rv != EAGAIN && rv != EWOULDBLOCK)
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "send_tap port %d: %s", port, errorbuff);
 		}
 		else
@@ -290,17 +291,17 @@ void handle_io(unsigned char type, SOCKET fd, int revents, void* private_data)
 		len = send(fd, (char*) & (packet.p), sizeof(struct packet), 0);
 		if (len < 0)
 		{
-			if (errno != EAGAIN && errno != EWOULDBLOCK)
+			if (switch_errno != EAGAIN && switch_errno != EWOULDBLOCK)
 			{
-				strerror_s(errorbuff, sizeof(errorbuff), errno);
+				strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 				printlog(LOG_WARNING, "Reading tap data: %s", errorbuff);
 			}
 		}
 		else if (len == 0)
 		{
-			if (errno != EAGAIN && errno != EWOULDBLOCK)
+			if (switch_errno != EAGAIN && switch_errno != EWOULDBLOCK)
 			{
-				strerror_s(errorbuff,sizeof(errorbuff),errno);
+				strerror_s(errorbuff,sizeof(errorbuff),switch_errno);
 				printlog(LOG_WARNING, "EOF tap data port: %s", errorbuff);
 			}
 			/* close tap! */
@@ -319,7 +320,7 @@ struct inittuntap* add_init_tap(struct inittuntap* p, const char* arg)
 		p = malloc(sizeof(struct inittuntap));
 		if (p == NULL)
 		{
-			strerror_s(errorbuff, sizeof(errorbuff), errno);
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "Malloc Tap init:%s\n", errorbuff);
 		}
 		else
@@ -426,7 +427,7 @@ int open_tap(char* dev)
 	int fd;
 
 	if ((fd = open("/dev/tun", O_RDWR)) < 0) {
-		printlog(LOG_ERR, "Failed to open /dev/tun %s", strerror(errno));
+		printlog(LOG_ERR, "Failed to open /dev/tun %s", strerror(switch_errno));
 		return(-1);
 	}
 	memset(&ifr, 0, sizeof(ifr));
@@ -434,7 +435,7 @@ int open_tap(char* dev)
 	strncpy(ifr.ifr_name, dev, sizeof(ifr.ifr_name) - 1);
 	/*printf("dev=\"%s\", ifr.ifr_name=\"%s\"\n", ifr.ifr_name, dev);*/
 	/*if (ioctl(fd, TUNSETIFF, (void*)&ifr) < 0) {
-		printlog(LOG_ERR, "TUNSETIFF failed %s", strerror(errno));
+		printlog(LOG_ERR, "TUNSETIFF failed %s", strerror(switch_errno));
 		close(fd);
 		return(-1);
 	}
