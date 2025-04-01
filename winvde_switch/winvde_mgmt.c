@@ -752,22 +752,31 @@ int validatescript(struct comparameter* parameter)
 
 int runscript(struct comparameter* parameter)
 {
+	enum script_state {
+		start_of_line, // chomp space
+		start_of_command,
+		start_of_single_line_comment,
+		start_of_multi_line_comment,
+	};
+	uint8_t end_of_comment = 0;
+	uint32_t scriptState = start_of_line;
 	size_t len = 0;
 	FILE* script_file = NULL;
 	char* cmd_start = NULL;
 	char* cmd_end = NULL;
 	char buf[MAXCMD];
+	char* ptr = NULL;
 	if (!parameter)
 	{
 		switch_errno = EINVAL;
 		return -1;
 	}
 	if (
-		parameter->type1 == com_type_socket && 
-		parameter->type2 == com_type_null && 
+		parameter->type1 == com_type_socket &&
+		parameter->type2 == com_type_null &&
 		parameter->paramType == com_param_type_string &&
 		parameter->paramValue.stringValue != NULL
-	)
+		)
 	{
 		if (validatescript(parameter) == 0)
 		{
@@ -780,52 +789,106 @@ int runscript(struct comparameter* parameter)
 				}
 				else
 				{
-					while (fgets(buf, MAXCMD, script_file) != NULL)
+					ptr = fgets(buf, MAXCMD, script_file);
+					cmd_start = buf;
+					len = strlen(buf);
+					while (ptr != NULL)
 					{
 						len = strlen(buf);
-						if (len > 1 && buf[len - 1] == '\n')
+						if (scriptState == start_of_line)
 						{
-							buf[len - 1] = '\0';
-						}
-						cmd_start = buf[0];
-						while (*cmd_start == ' ' || *cmd_start == '\t') // Remove leading spaces
-						{
-							cmd_start++;
-						}
-						cmd_end = buf[len - 1];
-						while (*cmd_end == ' ' || *cmd_start == '\t')
-						{
-							cmd_end--;
-						}
-						if (*cmd_start == ';')
-						{
-							// Skip Commend Line
-							continue;
-						}
-						if (*cmd_start == '#')
-						{
-							continue;
-						}
-						if (*cmd_start == '/' && *(cmd_start + 1) == '/')
-						{
-							continue;
-						}
-						if (*cmd_start == '-' && *(cmd_start + 1) == '-')
-						{
-							continue;
-						}
-						if (parameter->data1.socket != INVALID_SOCKET)
-						{
-							char* scriptprompt = NULL;
-							asprintf(&scriptprompt, "vde[%s]: %s\n", parameter->paramValue.stringValue, buf);
-							len = strlen(scriptprompt);
-							if (len > INT_MAX)
+							if (cmd_start != NULL && *cmd_start == '\n')
 							{
-								fprintf(stderr, "Failed to write more than INT_MAX bytes: %lld\n", len);
-								return -1;
+								ptr = fgets(buf, MAXCMD, script_file);
+								len = strlen(buf);
+								scriptState = start_of_line;
+								continue;
 							}
-							send(parameter->data1.socket, scriptprompt, (int)len, 0);
-							free(scriptprompt);
+							if (len > 1 && buf[len - 1] == '\n')
+							{
+								buf[len - 1] = '\0';
+							}
+							cmd_start = buf;
+							while (*cmd_start == ' ' || *cmd_start == '\t') // Remove leading spaces
+							{
+								cmd_start++;
+							}
+							cmd_end = &buf[len - 1];
+							while (*cmd_end == ' ' || *cmd_start == '\t') // renmove ending space
+							{
+								cmd_end--;
+							}
+							if (*cmd_start == ';')
+							{
+								// Skip Commend Line
+								ptr = fgets(buf, MAXCMD, script_file);
+								len = strlen(buf);
+								scriptState = start_of_line;
+								continue;
+							}
+							else if (*cmd_start == '#')
+							{
+								ptr = fgets(buf, MAXCMD, script_file);
+								len = strlen(buf);
+								scriptState = start_of_line;
+								continue;
+							}
+							else if (*cmd_start == '/' && *(cmd_start + 1) == '/')
+							{
+								ptr = fgets(buf, MAXCMD, script_file);
+								len = strlen(buf);
+								scriptState = start_of_line;
+								continue;
+							}
+							else if (*cmd_start == '-' && *(cmd_start + 1) == '-')
+							{
+								ptr = fgets(buf, MAXCMD, script_file);
+								len = strlen(buf);
+								scriptState = start_of_line;
+								continue;
+							}
+							else if (*cmd_start == '/' && *(cmd_start + 1) == '*')
+							{
+								scriptState = start_of_multi_line_comment;
+							}
+							scriptState = start_of_command;
+
+						}
+						if (scriptState == start_of_multi_line_comment || (scriptState == start_of_command && *cmd_start == '/' && *(cmd_start + 1) == '*'))
+						{
+							scriptState = start_of_multi_line_comment;
+							while (end_of_comment == 0)
+							{
+								if (*cmd_start == '*' && *(cmd_start + 1) == '/')
+								{
+									scriptState = start_of_line;
+									end_of_comment = 1;
+									cmd_start++;
+									cmd_start++;
+									break;
+								}
+								if (*cmd_start == '\0')
+								{
+									ptr = fgets(buf, MAXCMD, script_file);
+									len = strlen(buf);
+									cmd_start = buf;
+									continue;
+								}
+								cmd_start++;
+							}
+							end_of_comment = 0;
+						}
+						if (scriptState == start_of_command && validatecommand(cmd_start) == -1)
+						{
+							switch_errno = EINVAL;
+							return -1;
+						}
+						else if (scriptState == start_of_command)
+						{
+							scriptState = start_of_line;
+							ptr = fgets(buf, MAXCMD, script_file);
+							len = strlen(buf);
+							cmd_start = buf;
 						}
 						handle_cmd(mgmt_data, parameter->data1.socket, buf);
 					}
@@ -839,11 +902,6 @@ int runscript(struct comparameter* parameter)
 			fprintf(stderr, "Failed to validate the script - will not load\n");
 			return -1;
 		}
-	}
-	else
-	{
-		switch_errno = EINVAL;
-		return -1;
 	}
 	return 0;
 }
