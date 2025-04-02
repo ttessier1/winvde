@@ -1598,7 +1598,7 @@ int print_port(struct _memory_file* memstream, int index, int inclinactive)
 		}
 
 #ifdef PORTCOUNTERS
-		length = asprintf(&tmpBuff, " IN:  pkts %10lld          bytes %20lld\n", portv[i]->pktsin, portv[i]->bytesin);
+		length = asprintf(&tmpBuff, " IN:  pkts %10lld          bytes %20lld\n", portv[index]->pktsin, portv[index]->bytesin);
 		if (length > 0 && tmpBuff)
 		{
 			write_memorystream(memstream, tmpBuff, length);
@@ -1609,7 +1609,7 @@ int print_port(struct _memory_file* memstream, int index, int inclinactive)
 			switch_errno = ENOMEM;
 			return 1;
 		}
-		length = asprintf(&tmpBuff, " OUT: pkts %10lld          bytes %20lld\n", portv[i]->pktsout, portv[i]->bytesout);
+		length = asprintf(&tmpBuff, " OUT: pkts %10lld          bytes %20lld\n", portv[index]->pktsout, portv[index]->bytesout);
 		if (length > 0 && tmpBuff)
 		{
 			write_memorystream(memstream, tmpBuff, length);
@@ -1622,7 +1622,7 @@ int print_port(struct _memory_file* memstream, int index, int inclinactive)
 		}
 #endif
 		for (ep = portv[index]->ep; ep != NULL; ep = ep->next) {
-			length = asprintf(&tmpBuff, "  -- endpoint ID %04d module %-12s: %s", ep->fd_ctl,
+			length = asprintf(&tmpBuff, "  -- endpoint ID %04d module %-12s: %s\n", ep->fd_ctl,
 				portv[index]->ms->modname, (ep->descr) ? ep->descr : "no endpoint description");
 			if (length > 0 && tmpBuff)
 			{
@@ -1635,7 +1635,7 @@ int print_port(struct _memory_file* memstream, int index, int inclinactive)
 				return 1;
 			}
 #ifdef VDE_PQ2
-			length = asprintf(&tmpBuff, "              unsent packets: %d max %d", ep->vdepq_count, ep->vdepq_max);
+			length = asprintf(&tmpBuff, "              unsent packets: %d max %d\n", ep->vdepq_count, ep->vdepq_max);
 			if (length > 0 && tmpBuff)
 			{
 				write_memorystream(memstream, tmpBuff, length);
@@ -2498,3 +2498,58 @@ void handle_out_packet(struct endpoint* ep)
 }
 #endif
 
+#if defined(PORTCOUNTERS)
+static void portzerocounter(int i)
+{
+	if (portv[i] != NULL) {
+		portv[i]->pktsin = 0;
+		portv[i]->pktsout = 0;
+		portv[i]->bytesin = 0;
+		portv[i]->bytesout = 0;
+	}
+}
+
+//int portresetcounters(char* arg)
+int portresetcounters(struct comparameter* parameter)
+{
+	int intValue=0;
+	if (!parameter)
+	{
+		switch_errno = EINVAL;
+		return -1;
+	}
+	if (parameter->type1 == com_type_null &&
+		parameter->type2 == com_type_null &&
+		parameter->paramType == com_param_type_string 
+
+		)
+	{
+		if (parameter->paramValue.stringValue != NULL ) {
+			intValue = atoi(parameter->paramValue.stringValue);
+			if (intValue < 0 || intValue >= numports)
+			{
+				switch_errno = EINVAL;
+				return -1;
+			}
+			else
+			{
+				portzerocounter(intValue);
+				return 0;
+			}
+		}
+		else
+		{
+			for (intValue = 0; intValue < numports; intValue++)
+			{
+				portzerocounter(intValue);
+			}
+			return 0;
+		}
+	}
+	else
+	{
+		switch_errno = EINVAL;
+		return -1;
+	}
+}
+#endif

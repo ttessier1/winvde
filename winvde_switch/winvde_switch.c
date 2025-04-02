@@ -23,7 +23,10 @@
 #include "winvde_descriptor.h"
 #include "winvde_output.h"
 #include "winvde_qtimer.h"
-#include "winvde_mgmt.h"
+
+#if defined(HAVE_TUNTAP)
+#include "winvde_tuntap.h"
+#endif
 
 #include "version.h"
 
@@ -136,6 +139,9 @@ int main(const int argc, const char ** argv)
 
         fprintf(stdout, "Main Loop\n");
     }
+#if defined(HAVE_TUNTAP)
+    StopTunTap();
+#endif
     WSACleanup();
 }
 
@@ -286,6 +292,7 @@ void StartModules()
     StartDataSock();
     StartConsMgmt();
 #if defined(HAVE_TUNTAP)
+
     StartTunTap();
 #endif
 }
@@ -476,13 +483,6 @@ void ParseArguments(const int argc, const char** argv)
     }
 
 }
-
-
-void StartTunTap(void)
-{
-
-}
-
 
 void Usage()
 {

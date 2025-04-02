@@ -39,6 +39,9 @@ struct endpoint {
 	int vdepq_count;
 	int vdepq_max;
 #endif
+#if defined(HAVE_TUNTAP)
+	HANDLE hTunnel;
+#endif
 	struct endpoint* next;
 };
 
@@ -105,11 +108,16 @@ void send_packet_port(struct port* Port, unsigned short portno, char* packet, in
 void send_packet_port(struct port* Port, unsigned short portno, char* packet, int len, void** tmpBuff);
 #endif
 
-#ifdef VDE_PQ2
+#if defined(VDE_PQ2)
  int defqlen(struct comparameter* parameter);
  int epqlen(struct comparameter* parameter);
 int rec_setqlen_ep(struct endpoint* ep, SOCKET fd_ctl, int len);
 int setqlen_ep_port_fd(uint16_t portno, SOCKET fd_ctl, int len);
 int trysendfun(struct endpoint* ep, void* packet, int len);
 void handle_out_packet(struct endpoint* ep);
+#endif
+
+#if defined(PORTCOUNTERS)
+static void portzerocounter(int i);
+int portresetcounters(struct comparameter* parameter);
 #endif

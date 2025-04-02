@@ -370,6 +370,7 @@ void datasock_handle_io(unsigned char type, SOCKET fd, int revents, void* arg)
 	struct sockaddr addr;
 	uint32_t len;
 	SOCKET new;
+	DWORD one = 1;
 	if (type == data_type)
 	{
 #ifdef VDE_PQ2
@@ -467,19 +468,20 @@ void datasock_handle_io(unsigned char type, SOCKET fd, int revents, void* arg)
 	else /*if (type == ctl_type)*/ {
 		
 
-		len = sizeof(addr);
-		new = accept(fd, &addr, &len);
+		len = sizeof(SOCKADDR_IN);
+		new = accept(fd, NULL,NULL);
 		if (new < 0) {
 			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
 			printlog(LOG_WARNING, "accept %s", errorbuff);
 			return;
 		}
-		/*
-		   if(fcntl(new, F_SETFL, O_NONBLOCK) < 0){
-		   printlog(LOG_WARNING,"fcntl - setting O_NONBLOCK %s",strerror(switch_errno));
-		   close(new);
-		   return;
-		   }*/
+		if (ioctlsocket(new, FIONBIO, &one) == SOCKET_ERROR)
+		{
+			strerror_s(errorbuff, sizeof(errorbuff), switch_errno);
+			printlog(LOG_WARNING, "mgmt fcntl - setting O_NONBLOCK %s", errorbuff);
+			closesocket(new);
+			return -1;
+		}
 
 		add_fd(new, wd_type, datasock_module.module_tag,NULL);
 	}
